@@ -89,7 +89,7 @@ module.exports = {
           return modifyManifest(content)
         }
       },
-      { from: 'public', to: '.' },
+      { from: 'public', to: '.', globOptions: { ignore: ['**/background.html'] } },
       {
         from: 'static/audio',
         to: 'static/audio'

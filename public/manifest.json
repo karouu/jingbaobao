@@ -1,14 +1,13 @@
 {
-  "manifest_version": 2,
+  "manifest_version": 3,
   "name": "京价保 - 京东价保助手",
   "short_name": "京价保",
   "description": "京价保是一个监控京东商品价格变化，即时提供价保申请信息的浏览器插件",
   "version": "0.1.1",
   "background": {
-    "page": "background.html",
-    "persistent": true
+    "service_worker": "static/background.js"
   },
-  "browser_action": {
+  "action": {
     "default_icon": "static/image/jjb.png",
     "default_popup": "popup.html"
   },
@@ -53,13 +52,22 @@
     "128": "static/image/128.png"
   },
   "web_accessible_resources": [
-    "static/touch-emulator.js"
+    {
+      "resources": [
+        "static/touch-emulator.js"
+      ],
+      "matches": [
+        "*://*.jd.com/*",
+        "*://*.jd.hk/*"
+      ]
+    }
+  ],
+  "host_permissions": [
+    "*://*.jd.com/*",
+    "*://*.jd.hk/*"
   ],
   "permissions": [
-    "*://*.jd.com/*",
-    "*://*.jd.hk/*",
     "webRequest",
-    "webRequestBlocking",
     "alarms",
     "contextMenus",
     "notifications"
