@@ -1,6 +1,6 @@
 // 京价保
 import 'weui';
-import weui from 'weui.js';
+import weui from './shim/weui.js';
 import dialogPolyfill from 'dialog-polyfill'
 
 import '../static/style/content.css'
@@ -943,12 +943,16 @@ function handProtection(setting, priceInfo) {
     let buyDom = $("#InitCartUrl").length > 0 ? $("#InitCartUrl") : $("#btn-reservation")
     let item = $(".ellipsis").text()
     let price = priceInfo ? (priceInfo.normal_price || priceInfo.plus_price) : ($('.p-price .price').text() ? $('.p-price .price').text().replace(/[^0-9\.-]+/g, "") : null) || ($('#jd-price').text() ? $('#jd-price').text().replace(/[^0-9\.-]+/g, "") : null)
-    // 拼接提示
-    let dialogMsgDOM = `<dialog id="dialogMsg" class="message">` +
-      `<p class="green-text">恭喜你省下了 ¥` + price + ` ！</p>` +
-      `</dialog>`
-    // 写入提示消息
-    $("body").append(dialogMsgDOM);
+    
+    // Create dialogMsg safely
+    let dialogMsg = document.createElement('dialog');
+    dialogMsg.id = 'dialogMsg';
+    dialogMsg.className = 'message';
+    let p = document.createElement('p');
+    p.className = 'green-text';
+    p.textContent = '恭喜你省下了 ¥' + price + ' ！';
+    dialogMsg.appendChild(p);
+    document.body.appendChild(dialogMsg);
 
     buyDom.removeAttr("clstag")
     buyDom.on("click", function () {
@@ -957,34 +961,75 @@ function handProtection(setting, priceInfo) {
       if ($("#dialog").length > 0) {
         $("#dialog").remove()
       }
-      // 拼接提示
-      let dialogDOM = `<dialog id="dialog">` +
-        `<span class="close">x</span>` +
-        `<form method="dialog">` +
-        `<h3>你真的需要买` + (Number(count) > 1 ? count + '个' : '') + item + `吗?</h3>` +
-        `<div class="consideration">` +
-        `<p>它是必须的吗？使用的频率足够高吗？</p>` +
-        `<p>它真的可以解决你的需求吗？现有方案完全无法接受吗？</p>` +
-        `<p>如果收到不合适，它在试用之后退款方便吗？</p>` +
-        `<p>现在购买它的价格 ¥` + price + ` 合适吗？</p>` +
-        (Number(count) > 1 ? `<p>有必要现在购买 ` + count + `个吗？</p>` : '') +
-        `</div>` +
-        `<div class="actions">` +
-        `<a href="` + buyDom.attr("href") + `" class="volume-purchase forcedbuy" target="_blank">坚持购买</a>` +
-        `<button type="submit" value="no" class="giveUp btn-special2 btn-lg" autofocus>一键省钱</button>` +
-        `</div>` +
-        `<p class="admonish">若无必要，勿增实体</p>` +
-        `</form>` +
-        `</dialog>`
-      // 写入提示
-      $("body").append(dialogDOM);
-      var dialog = document.getElementById('dialog');
-      var dialogMsg = document.getElementById('dialogMsg');
+      
+      // Create main dialog safely
+      let dialog = document.createElement('dialog');
+      dialog.id = 'dialog';
+
+      let closeSpan = document.createElement('span');
+      closeSpan.className = 'close';
+      closeSpan.textContent = 'x';
+      dialog.appendChild(closeSpan);
+
+      let form = document.createElement('form');
+      form.method = 'dialog';
+      dialog.appendChild(form);
+
+      let h3 = document.createElement('h3');
+      h3.textContent = '你真的需要买' + (Number(count) > 1 ? count + '个' : '') + item + '吗?';
+      form.appendChild(h3);
+
+      let considerationDiv = document.createElement('div');
+      considerationDiv.className = 'consideration';
+      const questions = [
+          '它是必须的吗？使用的频率足够高吗？',
+          '它真的可以解决你的需求吗？现有方案完全无法接受吗？',
+          '如果收到不合适，它在试用之后退款方便吗？',
+          '现在购买它的价格 ¥' + price + ' 合适吗？'
+      ];
+      if (Number(count) > 1) questions.push('有必要现在购买 ' + count + '个吗？');
+
+      questions.forEach(q => {
+          let p = document.createElement('p');
+          p.textContent = q;
+          considerationDiv.appendChild(p);
+      });
+      form.appendChild(considerationDiv);
+
+      let actionsDiv = document.createElement('div');
+      actionsDiv.className = 'actions';
+
+      let link = document.createElement('a');
+      link.href = buyDom.attr("href");
+      link.className = 'volume-purchase forcedbuy';
+      link.target = '_blank';
+      link.textContent = '坚持购买';
+      actionsDiv.appendChild(link);
+
+      let giveUpBtn = document.createElement('button');
+      giveUpBtn.type = 'submit';
+      giveUpBtn.value = 'no';
+      giveUpBtn.className = 'giveUp btn-special2 btn-lg';
+      giveUpBtn.autofocus = true;
+      giveUpBtn.textContent = '一键省钱';
+      actionsDiv.appendChild(giveUpBtn);
+
+      form.appendChild(actionsDiv);
+
+      let admonishP = document.createElement('p');
+      admonishP.className = 'admonish';
+      admonishP.textContent = '若无必要，勿增实体';
+      form.appendChild(admonishP);
+
+      document.body.appendChild(dialog);
+
+      // var dialog = document.getElementById('dialog');
+      // var dialogMsg = document.getElementById('dialogMsg');
       dialogPolyfill.registerDialog(dialog);
       dialogPolyfill.registerDialog(dialogMsg);
       dialog.showModal();
 
-      document.querySelector('#dialog .close').onclick = function () {
+      closeSpan.onclick = function () {
         dialog.close();
       };
 
@@ -1039,12 +1084,15 @@ function markCheckinStatus(type, value, cb) {
   });
 }
 
-var auto_login_html = "<p class='auto_login'><span class='jjb-login'>让京价保记住密码并自动登录</span></p>";
-var remberme_html = `<label for="remberme" class="remberme J_ping" report-eventid="MLoginRegister_AutoLogin">
-  <input type="checkbox" id="remberme" checked>
-  <span class="icon icon-rember"></span>
-  <span class="txt-remberme">一个月内免登录</span>
-  </label>`
+function createAutoLoginElement() {
+  let p = document.createElement('p');
+  p.className = 'auto_login';
+  let span = document.createElement('span');
+  span.className = 'jjb-login';
+  span.textContent = '让京价保记住密码并自动登录';
+  p.appendChild(span);
+  return p;
+}
 
 // 保存账号
 function saveAccount(account) {
@@ -1248,7 +1296,7 @@ function dealLoginPage() {
     simulateClick($(".planBLogin"), true)
 
     getAccount('m')
-    $(auto_login_html).insertAfter(".page .notice")
+    $(".page .notice").after(createAutoLoginElement())
     // 点击让京价保自动登录
     $('.page').on('click', '.jjb-login', function (e) {
       window.event ? window.event.returnValue = false : e.preventDefault();
@@ -1270,7 +1318,7 @@ function dealLoginPage() {
     simulateClick($(".login-tab-r a"), true)
     // 获取账号
     getAccount('pc')
-    $(auto_login_html).insertAfter("#formlogin")
+    $("#formlogin").after(createAutoLoginElement())
     $('.login-box').on('click', '.jjb-login', function (e) {
       window.event ? window.event.returnValue = false : e.preventDefault();
       var username = $("#loginname").val()
@@ -1910,7 +1958,7 @@ function checkLoginState() {
 
 // 不在收银台域名下运行任何任务
 if (window.location.host != 'pcashier.jd.com') {
-  $(document).ready(function () {
+  function onReady() {
     // console.log('京价保注入页面成功');
     checkLoginState()
     if (!pageTaskRunning) {
@@ -1919,7 +1967,13 @@ if (window.location.host != 'pcashier.jd.com') {
         CheckDom()
       }, 1200)
     }
-  });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', onReady);
+} else {
+  onReady();
+}
 }
 
 // 消息

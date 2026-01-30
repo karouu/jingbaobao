@@ -501,7 +501,6 @@
 <script>
 import * as _ from "lodash";
 import tippy from "tippy.js";
-import Vue from "vue";
 
 import "weui";
 import "../../static/style/popup.css";
@@ -531,11 +530,6 @@ function tippyElement(el) {
   }, 50);
 }
 
-Vue.directive("tippy", {
-  componentUpdated: tippyElement,
-  inserted: tippyElement,
-});
-
 import loginNotice from "./login-notice.vue";
 import settings from "./settings.vue";
 import guide from "./guide.vue";
@@ -544,6 +538,12 @@ import weDialog from "./we-dialog.vue";
 
 export default {
   name: "App",
+  directives: {
+    tippy: {
+      mounted: tippyElement,
+      updated: tippyElement,
+    }
+  },
   components: { loginNotice, settings, guide, popup, weDialog },
   data() {
     return {

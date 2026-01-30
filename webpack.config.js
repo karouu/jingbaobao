@@ -2,7 +2,7 @@ const path = require('path');
 const { VueLoaderPlugin } = require('vue-loader');
 const { CleanWebpackPlugin } = require('clean-webpack-plugin');
 const CopyPlugin = require('copy-webpack-plugin');
-const { EnvironmentPlugin } = require('webpack');
+const { EnvironmentPlugin, DefinePlugin } = require('webpack');
 
 function modifyManifest(buffer) {
   let manifest = JSON.parse(buffer.toString());
@@ -33,7 +33,7 @@ module.exports = {
   },
   resolve: {
     alias: {
-      'vue$': 'vue/dist/vue.runtime.esm.js'
+      'vue$': 'vue/dist/vue.runtime.esm-bundler.js'
     },
     extensions: ['.js', '.vue', '.json']
   },
@@ -60,14 +60,14 @@ module.exports = {
       {
         test: /\.less$/,
         use: [
-          'vue-style-loader',
+          'style-loader',
           'css-loader',
           'less-loader'
         ]
       },
       {
         test: /\.css$/i,
-        use: ['vue-style-loader', 'style-loader', 'css-loader'],
+        use: ['style-loader', 'css-loader'],
       },
       {
         test: /\.vue$/,
@@ -121,6 +121,10 @@ module.exports = {
     }),
     new CleanWebpackPlugin(),
     new VueLoaderPlugin(),
+    new DefinePlugin({
+      __VUE_OPTIONS_API__: true,
+      __VUE_PROD_DEVTOOLS__: false,
+    }),
     new EnvironmentPlugin({
       NODE_ENV: 'development',
       BROWSER: 'chrome',

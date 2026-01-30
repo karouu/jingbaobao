@@ -3,15 +3,14 @@
     <div class="popup-show" v-if="showPopup">
       <div class="js_dialog" style="opacity: 1;">
         <div class="weui-mask"></div>
-        <hooper>
-          <slide class="slide" v-for="(event, index) in events" :key="event.id" :index="index">
+        <div class="slides-container">
+          <div class="slide" v-for="(event, index) in events" :key="event.id || index">
             <a :href="`${event.link}`" target="_blank">
               <img :src="event.poster" :title="event.title" width="300"/>
               <p  v-if="event.description" class="popup-title">{{event.description}}</p>
             </a>
-          </slide>
-          <hooper-navigation slot="hooper-addons"></hooper-navigation>
-        </hooper>
+          </div>
+        </div>
         <div class="close-popup" @click="close">&times;</div>
       </div>
     </div>
@@ -24,17 +23,12 @@
 <script>
 import { DateTime } from 'luxon'
 import { getSetting, saveSetting } from "../utils";
-import { Hooper, Slide, Navigation as HooperNavigation } from 'hooper';
-import 'hooper/dist/hooper.css';
 
 const today = DateTime.local().toFormat("o")
 
 export default {
   name: "popup",
   components: {
-    Hooper,
-    Slide,
-    HooperNavigation
   },
   data() {
     return {
@@ -105,14 +99,16 @@ export default {
   flex-direction: column;
   justify-content: center;
 }
-.hooper{
+.slides-container {
   max-height: 80%;
   min-height: 450px;
   z-index: 1001;
   width: 400px;
-}
-.hooper .slide {
+  overflow-y: auto;
   text-align: center;
+}
+.slide {
+  margin-bottom: 20px;
 }
 .close-popup{
   border: 2px solid #cacaca;

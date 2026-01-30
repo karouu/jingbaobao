@@ -3,28 +3,29 @@ $ = window.$ = window.jQuery = require('jquery')
 
 import tippy from 'tippy.js'
 import 'weui';
-import Vue from 'vue'
+import { createApp } from 'vue'
 
 import { getLoginState } from './account'
 
 import App from './components/App.vue';
-import VueLazyload from 'vue-lazyload'
+// import VueLazyload from 'vue-lazyload'
 
 import MessageBox from './components/messageBox/messageBox';
-Vue.use(MessageBox);
 
 import Toast from './components/toast/toast';
-Vue.use(Toast);
 
-Vue.use(VueLazyload, {
-  preLoad: 1.3,
-  error: '',
-  attempt: 1
-})
-new Vue({
-  el: '#app',
-  render: h => h(App)
-})
+const app = createApp(App);
+
+app.use(MessageBox);
+app.use(Toast);
+
+// app.use(VueLazyload, {
+//   preLoad: 1.3,
+//   error: '',
+//   attempt: 1
+// })
+
+app.mount('#app');
 
 
 

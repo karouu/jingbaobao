@@ -28,40 +28,15 @@ export default {
       resolve: '',
       reject: '',
       promise: '', // 保存promise对象
+      isShowConfimrBtn: true,
+      content: '这是弹框内容',
+      isShowCancelBtn: true,
+      title: '提示',
+      confirmVal: '确定',
+      cancelVal: '取消',
+      maskHide: true
     };
   },
-  props: {
-    isShowConfimrBtn: {
-      type: Boolean,
-      default: true
-    },
-    content: {
-      type: String,
-      default: '这是弹框内容'
-    },
-    isShowCancelBtn: {  //是否展示取消按钮
-      type: Boolean,
-      default: true
-    },
-    title: {   //标题
-      type: String,
-      default: '提示',
-    },
-    confirmVal: {
-      type: String,  //确认文字
-      default: '确定'
-    },
-    cancelVal: {   //取消文字
-      type: String,
-      default: '取消'
-    },
-    maskHide: {
-      type: Boolean,   //是否可以点击蒙层关闭
-      default: true
-    }
-  },
-
-
   methods: {
     // 确定,将promise断定为resolve状态
     confirm() {

@@ -2,6 +2,7 @@ import { DateTime } from 'luxon'
 import { getLoginState } from './account'
 import { getSetting, readableTime } from './utils'
 import { getTaskUsageImmediately, getTodayMessagesByTaskIdImmediately } from './db'
+import selectors from './config/selectors.json'
 
 const priceProUrl = "https://msitepp-fm.jd.com/rest/priceprophone/priceProPhoneMenu"
 const frequencyOptionText = {
@@ -132,11 +133,7 @@ const tasks = [
       host: ['a.jd.com']
     },
     deprecated: true,
-    selector: {
-      target: ".coupon-item:last",
-      result: ".mask .content",
-      successKeyWord: "成功",
-    },
+    selector: selectors.tasks['21'].selector,
     rateLimit: {
       weekly: 32,
       daily: 4,

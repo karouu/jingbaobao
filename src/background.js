@@ -25,12 +25,8 @@ $.ajaxSetup({
   headers: { 'x-machine-id': macId() }
 });
 
-// This is to remove X-Frame-Options header, if present
-// chrome.webRequest.onHeadersReceived removed for MV3 (replaced by declarativeNetRequest rules)
-
 // ============================================================================
-// Chrome API Wrappers - Forward calls to Service Worker since offscreen docs
-// have limited API access
+// Chrome API Wrappers
 // ============================================================================
 
 const chromeAction = {
@@ -122,33 +118,20 @@ const chromeRuntimeReload = () => {
   chrome.runtime.sendMessage({ type: 'CHROME_RUNTIME_RELOAD' });
 };
 
+// ============================================================================
+// Logic
+// ============================================================================
 
-
-// 判断浏览器
-try {
-  // browser namespace is not available in Chrome, use chrome namespace or polyfill if needed.
-  // MV3 checks usually sufficient.
-  // browser.runtime.getBrowserInfo().then(function (browserInfo) {
-  //   localStorage.setItem('browserName', browserInfo.name);
-  // })
-} catch (error) { }
-
-
-// 定时任务
-// Replaced by onMessage handler for ALARM_TRIGGERED
 function handleAlarm(alarm) {
   log('background', "onAlarm", alarm)
   let taskId = alarm.name.split('_').length > 1 ? alarm.name.split('_')[1] : null
   switch (true) {
-    // 计划任务
     case alarm.name.startsWith('runScheduleJob'):
       runJob(taskId)
       break;
-    // 定时任务
     case alarm.name.startsWith('runJob'):
       runJob(taskId)
       break;
-    // 周期运行（10分钟）
     case alarm.name == 'cycleTask':
       findJobs()
       runJob()
@@ -158,7 +141,8 @@ function handleAlarm(alarm) {
       resetIframe(taskId || 'iframe')
       break;
     case alarm.name.startsWith('destroyIframe'):
-      $("#" + taskId).remove();
+      const el = document.getElementById(taskId);
+      if (el) el.remove();
       break;
     case alarm.name.startsWith('closeTab'):
       try {
@@ -172,50 +156,505 @@ function handleAlarm(alarm) {
     case alarm.name == 'reload':
       chromeRuntimeReload()
       chromeAlarms.clearAll()
-      // 保留3天内的log
       Logline.keep(3);
       break;
   }
 }
-// Listen for forwarded alarms from Service Worker
+
+// Listen for forwarded messages from Service Worker
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  // Only process messages that are:
-  // 1. Internal alarm/notification triggers from SW (type check)
-  // 2. Forwarded legacy messages from SW (target: 'offscreen')
-  // 3. Responses (which usually don't trigger this listener but good to be safe)
+  // If the message is forwarded from the Service Worker, use the original sender
+  const msg = message.originalSender ? { ...message, ...message.originalSender } : message;
+  const originalSender = message.originalSender || sender;
 
-  // Verify source is trusted (from SW)
-  if (message.target !== 'offscreen' && !['ALARM_TRIGGERED', 'NOTIFICATION_CLICKED', 'NOTIFICATION_BUTTON_CLICKED', 'CHROME_ACTION', 'CHROME_ALARMS', 'CHROME_TABS', 'CHROME_WINDOWS', 'UPDATE_CONTEXT_MENU'].includes(message.type)) {
-    // If it's not one of our internal types and not marked as offscreen target, ignore it.
-    // This prevents the offscreen document from racing with the SW to handle messages from content scripts directly.
-    // However, since we are in the offscreen doc, we *are* the background script.
-    // But we want to FORCE the content script messages to go through SW -> ensureOffscreen -> background.js
-
-    // Actually, if we just ignore non-targeted messages, we achieve the goal.
-    // But wait, 'CHROME_ACTION' etc are OUTGOING messages from background.js, they shouldn't be handled here.
-    return;
-  }
-
+  // Handle internal events (Alarms, Notifications) - No response expected by SW usually
   if (message.type === 'ALARM_TRIGGERED') {
     handleAlarm(message.alarm);
+    return false;
   } else if (message.type === 'NOTIFICATION_CLICKED') {
-    // No changes to background.js needed based on analysis.
-    // The service_worker.js fix handles the communication channel issues. (it was registered in SW)
-    // The original code uses chrome.notifications.onClicked which might fire in SW
-    // We need to move that logic here or make handleNotificationClick function
     handleNotificationClick(message.notificationId);
+    return false;
   } else if (message.type === 'NOTIFICATION_BUTTON_CLICKED') {
     handleNotificationButtonClick(message.notificationId, message.buttonIndex);
+    return false;
   }
+
+  // Handle Legacy Actions (Response EXPECTED)
+  if (!msg.action) {
+    msg.action = msg.text
+  }
+  
+  let task
+  let loginState = getLoginState()
+  let hourInYear = DateTime.local().toFormat("oHH")
+
+  // Helper to send response safely
+  const done = (res) => {
+    try {
+      sendResponse(res || { result: "ok" });
+    } catch (e) {
+      console.error("sendResponse failed", e);
+    }
+  };
+
+  (async () => {
+    try {
+      switch (msg.action) {
+        // 获取移动页商品价格
+        case 'getProductPrice':
+          let url = `https://item.m.jd.com/product/${msg.sku}.html`
+          priceProPage = originalSender
+
+          setTimeout(() => {
+            openByIframe(url, 'temporary')
+          }, rand(5) * 1000);
+
+          done({
+            working: true
+          })
+          break;
+        // 通知商品价格
+        case 'productPrice':
+          let is_plus = (getSetting('is_plus') ? getSetting('is_plus') == 'checked' : false) || (getSetting('jjb_plus') == 'Y')
+          let disable_pricechart = (getSetting('disable_pricechart') ? getSetting('disable_pricechart') == 'checked' : false)
+          let priceInfo = {
+            sku: msg.sku,
+            name: msg.name,
+            price: is_plus ? (msg.plus_price || msg.normal_price) : msg.normal_price,
+            normal_price: msg.normal_price,
+            plus_price: msg.plus_price,
+            pingou_price: msg.pingou_price
+          }
+          // 当前有价保页面
+          if (priceProPage) {
+            console.log('existence PriceProPage:', priceProPage)
+            if (priceProPage.tab) {
+              chromeTabs.sendMessage(priceProPage.tab.id, Object.assign({
+                action: 'productPrice',
+                setting: getPriceProtectionSetting(),
+              }, priceInfo), {}, function (response) {
+                console.log('send productPrice to tabs response', response)
+              })
+            } else if (priceProPage.id) {
+              document.getElementById('iframe').contentWindow.postMessage(Object.assign({
+                action: 'productPrice',
+                setting: getPriceProtectionSetting(),
+              }, priceInfo), '*');
+            }
+          }
+          // 价格追踪
+          savePrice(priceInfo)
+          if (!disable_pricechart && priceInfo.sku) {
+            reportPrice(priceInfo)
+          }
+          done(priceInfo)
+          break;
+        // 促销信息
+        case 'promotions':
+          reportPromotions(msg)
+          done({ result: "promotions_reported" })
+          break;
+        // 保存登录状态
+        case 'saveLoginState':
+          saveLoginState(msg)
+          done(msg)
+          break;
+        // 获取登录状态
+        case 'getLoginState':
+          done(loginState)
+          break;
+        case 'getPriceProtectionSetting':
+          let priceProtectionSetting = getPriceProtectionSetting()
+          done(priceProtectionSetting)
+          break;
+        // 记住账号
+        case 'saveAccount':
+          if (msg.content.username && msg.content.password) {
+            saveSetting('jjb_account', msg.content);
+          }
+          done({ result: "account_saved" })
+          break;
+        // 自动登录
+        case 'autoLogin':
+          if (autoLoginQuota[hourInYear]) {
+            autoLoginQuota[hourInYear][msg.type] = 0
+          } else {
+            autoLoginQuota[hourInYear] = {
+              [msg.type]: 0
+            }
+          }
+          done(autoLoginQuota[hourInYear])
+          break;
+        // 保存变量值
+        case 'setVariable':
+          localStorage.setItem(msg.key, JSON.stringify(msg.value));
+          done({ result: "variable_set" })
+          break;
+        // 获取设置
+        case 'getSetting':
+          let setting = getSetting(msg.content)
+          let temporarySetting = localStorage.getItem('temporary_' + msg.content)
+          // 如果存在临时设置
+          if (temporarySetting) {
+            // 临时设置5分钟失效
+            setTimeout(() => {
+              localStorage.removeItem('temporary_' + msg.content)
+            }, 60 * 5 * 1000);
+            done(temporarySetting)
+          } else {
+            done(setting)
+          }
+          break;
+        // 获取页面参数
+        case 'getPageSetting':
+          let matchedTasks = findTasksByLocation(msg.location)
+          done({
+            tasks: matchedTasks
+          })
+          break;
+        case 'getAccount':
+          let account = getSetting('jjb_account', null)
+          let loginTypeState = getSetting('jjb_login-state_' + msg.type, {})
+          // 如果有 loginTypeState
+          if (account && loginTypeState && loginTypeState.time) {
+            loginTypeState.displayTime = DateTime.fromISO(loginTypeState.time).setLocale('zh-cn').toFormat('f')
+            account.loginState = loginTypeState
+          }
+          // 如果有自动登录次数配额限制
+          if (account && autoLoginQuota[hourInYear]) {
+            account.autoLoginQuota = autoLoginQuota[hourInYear][msg.type]
+          }
+          done(account)
+          break;
+        case 'paid':
+          localStorage.setItem('jjb_paid', 'Y');
+          sendChromeNotification(new Date().getTime().toString(), {
+            type: "basic",
+            title: "谢谢老板",
+            message: "我会努力签到、领券、申请价格保护来回报你的",
+            iconUrl: 'static/image/128.png'
+          })
+          done({ result: "thank_you" })
+          break;
+        case 'openLogin':
+          openLoginPage(loginState)
+          done({ result: "login_opened" })
+          break;
+        case 'openUrlAsMoblie':
+          openWebPageAsMobile(msg.url)
+          done({ result: "mobile_page_opened" })
+          break;
+        case 'openPricePro':
+          chrome.tabs.create({
+            url: "https://pcsitepp-fm.jd.com/"
+          })
+          done({ result: "price_pro_opened" })
+          break;
+        // 登录失败
+        case 'loginFailed':
+          // 保存状态
+          saveLoginState(msg)
+          done({ result: "failed_logged" }) // Send response early
+          if (getSetting("mute_login-failed", false)) break;
+          let lastNoticeLoginFailedAt = getSetting('lastNoticeLoginFailedAt', null)
+          if (lastNoticeLoginFailedAt && DateTime.local().hasSame(DateTime.fromISO(lastNoticeLoginFailedAt), 'day')) break;
+          saveSetting('lastNoticeLoginFailedAt', DateTime.local().toISO())
+          let loginErrMsg = (msg.type == 'pc' ? 'PC网页版' : '移动网页版') + "自动登录失败：" + msg.content
+          if (msg.notice) {
+            sendChromeNotification(new Date().getTime().toString() + "_login-failed_" + msg.type, {
+              type: "basic",
+              title: loginErrMsg,
+              message: "请点击本通知手动完成登录",
+              iconUrl: 'static/image/128.png',
+              buttons: [
+                {
+                  "title": "现在登录"
+                },
+                {
+                  "title": "不再提醒"
+                }
+              ]
+            })
+          }
+          break;
+        case 'option':
+          localStorage.setItem('jjb_' + msg.title, msg.content);
+          done({ result: "option_saved" })
+          break;
+        // 获取任务
+        case 'getTask':
+          task = getTask(msg.taskId)
+          done(task)
+          break;
+        // 手动运行任务
+        case 'runTask':
+          task = getTask(msg.taskId)
+          // set 临时运行
+          localStorage.setItem(`temporary_job${task.id}_frequency`, 'onetime');
+          // 任务因为频率受限无法运行
+          if (task.pause) {
+            let taskPauseMsg = `${task.title}已达到当前时段最大时段频率，每小时：${task.rateLimit.hour} 次，请勿重复运行等待自动运行`
+            sendChromeNotification(new Date().getTime().toString(), {
+              type: "basic",
+              title: "任务因为频率受限无法运行",
+              message: taskPauseMsg,
+              iconUrl: 'static/image/128.png'
+            })
+            done({
+              result: "pause",
+              message: taskPauseMsg
+            })
+          } else {
+            runJob(task.id, true)
+            if (!msg.hideNotice) {
+              sendChromeNotification(new Date().getTime().toString(), {
+                type: "basic",
+                title: "正在重新运行" + task.title,
+                message: "任务运行大约需要2分钟，如果有情况我再叫你（请勿连续运行）",
+                iconUrl: 'static/image/128.png'
+              })
+            }
+            done({
+              result: "success"
+            })
+          }
+          break;
+        case 'priceProtectionNotice':
+          var play_audio = getSetting('play_audio')
+          var hide_good = getSetting('hide_good')
+          if (play_audio && play_audio == 'checked' || msg.test) {
+            var myAudio = new Audio();
+            myAudio.src = "static/audio/price_protection.ogg";
+            myAudio.play();
+          }
+          if (!hide_good || hide_good != 'checked') {
+            msg.content = (msg.product_name ? msg.product_name.substr(0, 22) : '') + msg.content
+          }
+          sendChromeNotification(new Date().getTime().toString() + '_' + msg.batch, {
+            type: "basic",
+            title: msg.title,
+            message: msg.content,
+            iconUrl: moneyIcon
+          })
+          done({ result: "notice_sent" })
+          break;
+        case 'checkin_notice':
+          var mute_checkin = getSetting('mute_checkin')
+          if (mute_checkin && mute_checkin == 'checked' && !msg.test) {
+            console.log('checkin', msg)
+          } else {
+            var play_audio = getSetting('play_audio')
+            if (play_audio && play_audio == 'checked' || msg.test) {
+              var myAudio = new Audio();
+              if (msg.reward == "bean") {
+                myAudio.src = "static/audio/beans.ogg";
+              }
+              if (msg.reward == 'coin') {
+                myAudio.src = "static/audio/coin_drop.ogg";
+              }
+              if (myAudio.src) {
+                myAudio.play();
+              }
+            }
+            let icon = beanIcon
+            if (msg.reward == 'coin' || msg.reward == 'goldCoin') {
+              icon = coinIcon
+            }
+            sendChromeNotification(new Date().getTime().toString() + '_' + msg.batch, {
+              type: "basic",
+              title: msg.title,
+              message: msg.content,
+              iconUrl: icon
+            })
+          }
+          done({ result: "checkin_notice_handled" })
+          break;
+        // 签到状态
+        case 'markCheckinStatus':
+          let currentStatus = getSetting('jjb_checkin_' + msg.batch, null)
+          let data = {
+            date: DateTime.local().toFormat("o"),
+            time: new Date(),
+            value: msg.value
+          }
+          if (currentStatus && currentStatus.date == DateTime.local().toFormat("o")) {
+            console.log('已经记录过今日签到状态了')
+            done({ result: "already_recorded" })
+          } else {
+            localStorage.setItem('jjb_checkin_' + msg.batch, JSON.stringify(data));
+            done(data)
+          }
+          break;
+        // 运行状态
+        case 'runStatus':
+          task = getTask(msg.task.id)
+          localStorage.setItem('job' + task.id + '_lasttime', new Date().getTime())
+          saveLoginState({
+            content: task.title + "成功运行",
+            state: "alive",
+            type: msg.mode || task.type[0]
+          })
+          // 如果任务周期小于10小时，且不是计划任务，则安排下一次运行
+          if (mapFrequency[task.frequency] < 600 && !task.schedule) {
+            chromeAlarms.create('runJob_' + task.id, {
+              delayInMinutes: mapFrequency[task.frequency]
+            })
+          }
+          done({
+            result: true
+          })
+          break;
+        case 'create_tab':
+          var content = JSON.parse(msg.content)
+          chromeTabs.create({
+            index: content.index,
+            url: content.url,
+            active: content.active == 'true',
+            pinned: content.pinned == 'true'
+          }, function (tab) {
+            chromeTabs.update(tab.id, {
+              muted: true
+            }, function (result) {
+              log('background', "muted tab", result)
+            })
+            chromeAlarms.create('closeTab_' + tab.id, { delayInMinutes: 1 })
+          })
+          done({ result: "tab_created" })
+          break;
+        case 'couponReceived':
+          var coupon = msg.content
+          var mute_coupon = getSetting('mute_coupon')
+          if (mute_coupon && mute_coupon == 'checked') {
+            console.log('coupon', msg)
+          } else {
+            sendChromeNotification(new Date().getTime().toString() + "_coupon_" + coupon.batch, {
+              type: "basic",
+              title: msg.title,
+              message: coupon.name + coupon.price,
+              isClickable: true,
+              iconUrl: couponIcon
+            })
+          }
+          done({ result: "coupon_received" })
+          break;
+        // 发现新订单
+        case 'findOrder':
+          await new Promise(resolve => setTimeout(resolve, 50));
+          await findOrder(msg.orderId, msg.order);
+          done({ result: "order_found" })
+          break;
+        // 新的订单商品
+        case 'findGood':
+          await new Promise(resolve => setTimeout(resolve, 500));
+          await findGood(msg.orderId, msg.good);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          await updateOrders();
+          done({ result: "good_found" })
+          break;
+        // 查询商品列表
+        case 'getOrders':
+          await new Promise(resolve => setTimeout(resolve, 50));
+          await updateOrders();
+          done({ result: "orders_updated" })
+          break;
+        // 查询价格历史
+        case 'getPriceChart':
+          await new Promise(resolve => setTimeout(resolve, 50));
+          await getPriceChart(msg.sku, msg.days, originalSender);
+          done({ result: "price_chart_requested" })
+          break;
+        // 查询消息列表
+        case 'getMessages':
+          await new Promise(resolve => setTimeout(resolve, 50));
+          await updateMessages();
+          saveSetting('lastOpenPopupAt', DateTime.local().toISO())
+          done({ result: "messages_updated" })
+          break;
+        case 'clearUnread':
+          updateUnreadCount(-999)
+          done({ result: "unread_cleared" })
+          break;
+        case 'myTab':
+          done({
+            tab: originalSender.tab
+          });
+          break;
+        default:
+          console.log("Received %o from %o, frame", msg, originalSender.tab, originalSender.frameId);
+          // Always send a response even for unknown actions to prevent timeout
+          done({ result: "unknown_action", action: msg.action })
+      }
+    } catch (error) {
+      console.error("Error processing message:", error);
+      done({ error: error.toString() });
+    }
+  })();
+
+  // 更新图标
+  updateIcon()
+  // task log
+  if (msg.log && msg.task) {
+    setTimeout(async () => {
+      await findAndUpdateTaskResult(msg.task.id, {
+        action: msg.action,
+        title: msg.title,
+        content: msg.content,
+        timestamp: Date.now()
+      })
+    }, 50);
+  }
+  // 保存消息
+  switch (msg.action) {
+    case 'notice':
+    case 'priceProtectionNotice':
+    case 'couponReceived':
+    case 'goldCoinReceived':
+    case 'beanReceived':
+    case 'checkin_notice':
+      if (msg.test) {
+        break;
+      }
+      // 如果是单次任务完成的通知
+      if (msg.task && msg.task.onetimeKey) {
+        saveSetting(`task_onetime_${msg.task.onetimeKey}`, {
+          time: new Date(),
+          message: msg.message
+        })
+      }
+      let message = {
+        taskId: msg.task ? msg.task.id : null,
+        type: msg.type || msg.action || msg.text, // 通知的类型
+        batch: msg.batch, // 批次，通常是优惠券的属性
+        reward: msg.reward, // 奖励的类型
+        unit: msg.unit || msg.reward || msg.batch, // 奖励的单位
+        value: msg.value, // 奖励的数量
+        title: msg.title,
+        content: msg.content,
+        timestamp: Date.now()
+      }
+      let uuid = msg.uuid || Date.now()
+      updateUnreadCount(1)
+      setTimeout(async () => {
+        await newMessage(uuid, message);
+      }, 50);
+      setTimeout(async () => {
+        await updateMessages()
+      }, 3000);
+      break;
+  }
+  if (msg.action != 'saveAccount') {
+    log('message', msg.text, msg);
+  }
+  return true
 });
 
-// 保存任务栈
+// Functions
+
 function saveJobStack(jobStack) {
   jobStack = _.uniq(jobStack)
   localStorage.setItem('jobStack', JSON.stringify(jobStack));
 }
 
-// 根据页面查找匹配的任务
 function findTasksByLocation(location) {
   let taskList = getTasks()
   let locationTask = taskList.filter(task => task.location && Object.keys(task.location).length > 0)
@@ -251,7 +690,6 @@ function scheduleJob(task) {
   }
 }
 
-
 function pushJob(task, jobStack) {
   if (task.schedule) {
     chromeAlarms.get('runScheduleJob_' + task.id, function (alarm) {
@@ -268,7 +706,6 @@ function pushJob(task, jobStack) {
   return jobStack
 }
 
-// 寻找乔布斯
 function findJobs(platform) {
   let jobStack = getSetting('jobStack', [])
   let taskList = getTasks(platform)
@@ -306,7 +743,6 @@ function findJobs(platform) {
   saveJobStack(jobStack)
 }
 
-// 执行组织交给我的任务
 async function runJob(taskId, force = false) {
   // 不在凌晨阶段运行非强制任务
   if (DateTime.local().hour < 6 && !force) {
@@ -366,9 +802,14 @@ function log(type, message, details) {
 }
 
 function resetIframe(domId) {
-  $("#" + domId).remove();
-  let iframeDom = `<iframe id="${domId}" width="400 px" height="600 px" src=""></iframe>`;
-  $('body').append(iframeDom);
+  const existing = document.getElementById(domId);
+  if (existing) existing.remove();
+  const iframe = document.createElement('iframe');
+  iframe.id = domId;
+  iframe.width = "400 px";
+  iframe.height = "600 px";
+  iframe.src = "";
+  document.body.appendChild(iframe);
 }
 
 function openByIframe(src, type, delayTimes = 0) {
@@ -414,7 +855,6 @@ function updateUnreadCount(change = 0) {
   }
 }
 
-// 清除掉不必要的
 function removeExpiredLocalStorageItems() {
   let arr = [];
   for (var i = 0; i < localStorage.length; i++) {
@@ -458,7 +898,6 @@ $(document).ready(function () {
   }
 })
 
-// 用手机模式打开
 function openWebPageAsMobile(url) {
   chromeWindows.create({
     width: 420,
@@ -474,7 +913,6 @@ function openLoginPage(loginState) {
   })
 }
 
-// 点击通知
 function handleNotificationClick(notificationId) {
   if (notificationId.split('_').length > 0) {
     let batch = notificationId.split('_')[1]
@@ -518,7 +956,6 @@ function handleNotificationClick(notificationId) {
   }
 }
 
-// 按钮点击
 function handleNotificationButtonClick(notificationId, buttonIndex) {
   if (notificationId.split('_').length > 0) {
     let batch = notificationId.split('_')[1]
@@ -578,7 +1015,6 @@ function resetIcon() {
   });
 }
 
-// 根据登录状态调整图标显示
 function updateIcon() {
   let loginState = getLoginState()
   switch (loginState.class) {
@@ -659,7 +1095,6 @@ function updateIcon() {
   }
 }
 
-// 保存登录状态
 function saveLoginState(loginState) {
   let previousState = getLoginState()
   localStorage.setItem('jjb_login-state_' + loginState.type, JSON.stringify({
@@ -671,7 +1106,6 @@ function saveLoginState(loginState) {
     action: "loginState_updated",
     data: loginState
   });
-  // 如果登录状态从失败转换到了在线
   if (previousState[loginState.type].state != 'alive' && loginState.state == "alive") {
     setTimeout(() => {
       log('background', "login alive run job 1")
@@ -685,8 +1119,6 @@ function saveLoginState(loginState) {
   }
 }
 
-// 浏览器通知（合并）
-// mute_night
 function sendChromeNotification(id, content) {
   let hour = DateTime.local().hour;
   let muteNight = getSetting('mute_night', true);
@@ -698,7 +1130,6 @@ function sendChromeNotification(id, content) {
   }
 }
 
-// 价保设置
 function getPriceProtectionSetting() {
   let pro_min = getSetting('price_pro_min', 0.1);
   let is_plus = (getSetting('is_plus') ? getSetting('is_plus') == 'checked' : false) || (getSetting('jjb_plus') == 'Y')
@@ -712,473 +1143,23 @@ function getPriceProtectionSetting() {
   }
 }
 
-// 报告价格 (已移除)
 function reportPrice(priceInfo) {
-  // Removed zaoshu.so dependency
 }
 
-// 报告优惠信息 (已移除)
 function reportPromotions(promInfo) {
-  // Removed zaoshu.so dependency
 }
 
-// 加载任务参数 (已移除)
 function loadSettingsToLocalStorage(key) {
-  // Removed zaoshu.so dependency
 }
 
-// 加载推荐设置 (已移除)
 function loadRecommendSettingsToLocalStorage() {
-  // Removed zaoshu.so dependency
 }
 
-// 查询价格历史 (已移除)
 function getPriceChart(sku, days = 30, sender) {
-  // Removed zaoshu.so dependency
   chromeTabs.sendMessage(sender.tab.id, {
     type: "priceChart",
     error: "Price chart service disabled"
   });
 }
 
-// 处理消息通知
-chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
-  // If the message is forwarded from the Service Worker, use the original sender
-  if (msg.originalSender) {
-    sender = msg.originalSender;
-  }
-
-  if (!msg.action) {
-    msg.action = msg.text
-  }
-  let task
-  let loginState = getLoginState()
-  let hourInYear = DateTime.local().toFormat("oHH")
-  switch (msg.action) {
-    // 获取移动页商品价格
-    case 'getProductPrice':
-      let url = `https://item.m.jd.com/product/${msg.sku}.html`
-      priceProPage = sender
-
-      setTimeout(() => {
-        openByIframe(url, 'temporary')
-      }, rand(5) * 1000);
-
-      sendResponse({
-        working: true
-      })
-      break;
-    // 通知商品价格
-    case 'productPrice':
-      let is_plus = (getSetting('is_plus') ? getSetting('is_plus') == 'checked' : false) || (getSetting('jjb_plus') == 'Y')
-      let disable_pricechart = (getSetting('disable_pricechart') ? getSetting('disable_pricechart') == 'checked' : false)
-      let priceInfo = {
-        sku: msg.sku,
-        name: msg.name,
-        price: is_plus ? (msg.plus_price || msg.normal_price) : msg.normal_price,
-        normal_price: msg.normal_price,
-        plus_price: msg.plus_price,
-        pingou_price: msg.pingou_price
-      }
-      // 当前有价保页面
-      if (priceProPage) {
-        console.log('existence PriceProPage:', priceProPage)
-        if (priceProPage.tab) {
-          chromeTabs.sendMessage(priceProPage.tab.id, Object.assign({
-            action: 'productPrice',
-            setting: getPriceProtectionSetting(),
-          }, priceInfo), {}, function (response) {
-            console.log('send productPrice to tabs response', response)
-          })
-        } else if (priceProPage.id) {
-          document.getElementById('iframe').contentWindow.postMessage(Object.assign({
-            action: 'productPrice',
-            setting: getPriceProtectionSetting(),
-          }, priceInfo), '*');
-        }
-      }
-      // 价格追踪
-      savePrice(priceInfo)
-      if (!disable_pricechart && priceInfo.sku) {
-        reportPrice(priceInfo)
-      }
-      sendResponse(priceInfo)
-      break;
-    // 促销信息
-    case 'promotions':
-      reportPromotions(msg)
-      break;
-    // 保存登录状态
-    case 'saveLoginState':
-      saveLoginState(msg)
-      sendResponse(msg)
-      break;
-    // 获取登录状态
-    case 'getLoginState':
-      sendResponse(loginState)
-      break;
-    case 'getPriceProtectionSetting':
-      let priceProtectionSetting = getPriceProtectionSetting()
-      sendResponse(priceProtectionSetting)
-      break;
-    // 记住账号
-    case 'saveAccount':
-      if (msg.content.username && msg.content.password) {
-        saveSetting('jjb_account', msg.content);
-      }
-      break;
-    // 自动登录
-    case 'autoLogin':
-      if (autoLoginQuota[hourInYear]) {
-        autoLoginQuota[hourInYear][msg.type] = 0
-      } else {
-        autoLoginQuota[hourInYear] = {
-          [msg.type]: 0
-        }
-      }
-      sendResponse(autoLoginQuota[hourInYear])
-      break;
-    // 保存变量值
-    case 'setVariable':
-      localStorage.setItem(msg.key, JSON.stringify(msg.value));
-      break;
-    // 获取设置
-    case 'getSetting':
-      let setting = getSetting(msg.content)
-      let temporarySetting = localStorage.getItem('temporary_' + msg.content)
-      // 如果存在临时设置
-      if (temporarySetting) {
-        // 临时设置5分钟失效
-        setTimeout(() => {
-          localStorage.removeItem('temporary_' + msg.content)
-        }, 60 * 5 * 1000);
-        sendResponse(temporarySetting)
-      }
-      sendResponse(setting)
-      break;
-    // 获取页面参数
-    case 'getPageSetting':
-      let matchedTasks = findTasksByLocation(msg.location)
-      sendResponse({
-        tasks: matchedTasks
-      })
-      break;
-    case 'getAccount':
-      let account = getSetting('jjb_account', null)
-      let loginTypeState = getSetting('jjb_login-state_' + msg.type, {})
-      // 如果有 loginTypeState
-      if (account && loginTypeState && loginTypeState.time) {
-        loginTypeState.displayTime = DateTime.fromISO(loginTypeState.time).setLocale('zh-cn').toFormat('f')
-        account.loginState = loginTypeState
-      }
-      // 如果有自动登录次数配额限制
-      if (account && autoLoginQuota[hourInYear]) {
-        account.autoLoginQuota = autoLoginQuota[hourInYear][msg.type]
-      }
-      sendResponse(account)
-      break;
-    case 'paid':
-      localStorage.setItem('jjb_paid', 'Y');
-      sendChromeNotification(new Date().getTime().toString(), {
-        type: "basic",
-        title: "谢谢老板",
-        message: "我会努力签到、领券、申请价格保护来回报你的",
-        iconUrl: 'static/image/128.png'
-      })
-      break;
-    case 'openLogin':
-      openLoginPage(loginState)
-      break;
-    case 'openUrlAsMoblie':
-      openWebPageAsMobile(msg.url)
-      break;
-    case 'openPricePro':
-      chrome.tabs.create({
-        url: "https://pcsitepp-fm.jd.com/"
-      })
-      break;
-    // 登录失败
-    case 'loginFailed':
-      // 保存状态
-      saveLoginState(msg)
-      if (getSetting("mute_login-failed", false)) break;
-      let lastNoticeLoginFailedAt = getSetting('lastNoticeLoginFailedAt', null)
-      if (lastNoticeLoginFailedAt && DateTime.local().hasSame(DateTime.fromISO(lastNoticeLoginFailedAt), 'day')) break;
-      saveSetting('lastNoticeLoginFailedAt', DateTime.local().toISO())
-      let loginErrMsg = (msg.type == 'pc' ? 'PC网页版' : '移动网页版') + "自动登录失败：" + msg.content
-      if (msg.notice) {
-        sendChromeNotification(new Date().getTime().toString() + "_login-failed_" + msg.type, {
-          type: "basic",
-          title: loginErrMsg,
-          message: "请点击本通知手动完成登录",
-          iconUrl: 'static/image/128.png',
-          buttons: [
-            {
-              "title": "现在登录"
-            },
-            {
-              "title": "不再提醒"
-            }
-          ]
-        })
-      }
-      break;
-    case 'option':
-      localStorage.setItem('jjb_' + msg.title, msg.content);
-      break;
-    // 获取任务
-    case 'getTask':
-      task = getTask(msg.taskId)
-      sendResponse(task)
-      break;
-    // 手动运行任务
-    case 'runTask':
-      task = getTask(msg.taskId)
-      // set 临时运行
-      localStorage.setItem(`temporary_job${task.id}_frequency`, 'onetime');
-      // 任务因为频率受限无法运行
-      if (task.pause) {
-        let taskPauseMsg = `${task.title}已达到当前时段最大时段频率，每小时：${task.rateLimit.hour} 次，请勿重复运行等待自动运行`
-        sendChromeNotification(new Date().getTime().toString(), {
-          type: "basic",
-          title: "任务因为频率受限无法运行",
-          message: taskPauseMsg,
-          iconUrl: 'static/image/128.png'
-        })
-        sendResponse({
-          result: "pause",
-          message: taskPauseMsg
-        })
-      } else {
-        runJob(task.id, true)
-        if (!msg.hideNotice) {
-          sendChromeNotification(new Date().getTime().toString(), {
-            type: "basic",
-            title: "正在重新运行" + task.title,
-            message: "任务运行大约需要2分钟，如果有情况我再叫你（请勿连续运行）",
-            iconUrl: 'static/image/128.png'
-          })
-        }
-        sendResponse({
-          result: "success"
-        })
-      }
-      break;
-    case 'priceProtectionNotice':
-      var play_audio = getSetting('play_audio')
-      var hide_good = getSetting('hide_good')
-      if (play_audio && play_audio == 'checked' || msg.test) {
-        var myAudio = new Audio();
-        myAudio.src = "static/audio/price_protection.ogg";
-        myAudio.play();
-      }
-      if (!hide_good || hide_good != 'checked') {
-        msg.content = (msg.product_name ? msg.product_name.substr(0, 22) : '') + msg.content
-      }
-      sendChromeNotification(new Date().getTime().toString() + '_' + msg.batch, {
-        type: "basic",
-        title: msg.title,
-        message: msg.content,
-        iconUrl: moneyIcon
-      })
-      break;
-    case 'checkin_notice':
-      var mute_checkin = getSetting('mute_checkin')
-      if (mute_checkin && mute_checkin == 'checked' && !msg.test) {
-        console.log('checkin', msg)
-      } else {
-        var play_audio = getSetting('play_audio')
-        if (play_audio && play_audio == 'checked' || msg.test) {
-          var myAudio = new Audio();
-          if (msg.reward == "bean") {
-            myAudio.src = "static/audio/beans.ogg";
-          }
-          if (msg.reward == 'coin') {
-            myAudio.src = "static/audio/coin_drop.ogg";
-          }
-          if (myAudio.src) {
-            myAudio.play();
-          }
-        }
-        let icon = beanIcon
-        if (msg.reward == 'coin' || msg.reward == 'goldCoin') {
-          icon = coinIcon
-        }
-        sendChromeNotification(new Date().getTime().toString() + '_' + msg.batch, {
-          type: "basic",
-          title: msg.title,
-          message: msg.content,
-          iconUrl: icon
-        })
-      }
-      break;
-    // 签到状态
-    case 'markCheckinStatus':
-      let currentStatus = getSetting('jjb_checkin_' + msg.batch, null)
-      let data = {
-        date: DateTime.local().toFormat("o"),
-        time: new Date(),
-        value: msg.value
-      }
-      if (currentStatus && currentStatus.date == DateTime.local().toFormat("o")) {
-        console.log('已经记录过今日签到状态了')
-      } else {
-        localStorage.setItem('jjb_checkin_' + msg.batch, JSON.stringify(data));
-        sendResponse(data)
-      }
-      break;
-    // 运行状态
-    case 'runStatus':
-      task = getTask(msg.task.id)
-      localStorage.setItem('job' + task.id + '_lasttime', new Date().getTime())
-      saveLoginState({
-        content: task.title + "成功运行",
-        state: "alive",
-        type: msg.mode || task.type[0]
-      })
-      // 如果任务周期小于10小时，且不是计划任务，则安排下一次运行
-      if (mapFrequency[task.frequency] < 600 && !task.schedule) {
-        chromeAlarms.create('runJob_' + task.id, {
-          delayInMinutes: mapFrequency[task.frequency]
-        })
-      }
-      sendResponse({
-        result: true
-      })
-      break;
-    case 'create_tab':
-      var content = JSON.parse(msg.content)
-      chromeTabs.create({
-        index: content.index,
-        url: content.url,
-        active: content.active == 'true',
-        pinned: content.pinned == 'true'
-      }, function (tab) {
-        chromeTabs.update(tab.id, {
-          muted: true
-        }, function (result) {
-          log('background', "muted tab", result)
-        })
-        chromeAlarms.create('closeTab_' + tab.id, { delayInMinutes: 1 })
-      })
-      break;
-    case 'couponReceived':
-      var coupon = msg.content
-      var mute_coupon = getSetting('mute_coupon')
-      if (mute_coupon && mute_coupon == 'checked') {
-        console.log('coupon', msg)
-      } else {
-        sendChromeNotification(new Date().getTime().toString() + "_coupon_" + coupon.batch, {
-          type: "basic",
-          title: msg.title,
-          message: coupon.name + coupon.price,
-          isClickable: true,
-          iconUrl: couponIcon
-        })
-      }
-      break;
-    // 发现新订单
-    case 'findOrder':
-      setTimeout(async () => {
-        findOrder(msg.orderId, msg.order);
-      }, 50);
-      break;
-    // 新的订单商品
-    case 'findGood':
-      setTimeout(async () => {
-        findGood(msg.orderId, msg.good);
-      }, 500);
-      setTimeout(async () => {
-        await updateOrders()
-      }, 1000);
-      break;
-    // 查询商品列表
-    case 'getOrders':
-      setTimeout(async () => {
-        await updateOrders()
-      }, 50);
-      break;
-    // 查询价格历史
-    case 'getPriceChart':
-      setTimeout(async () => {
-        await getPriceChart(msg.sku, msg.days, sender)
-      }, 50);
-      break;
-    // 查询消息列表
-    case 'getMessages':
-      setTimeout(async () => {
-        await updateMessages()
-      }, 50);
-      saveSetting('lastOpenPopupAt', DateTime.local().toISO())
-      break;
-    case 'clearUnread':
-      updateUnreadCount(-999)
-      break;
-    case 'myTab':
-      sendResponse({
-        tab: sender.tab
-      });
-      break;
-    default:
-      console.log("Received %o from %o, frame", msg, sender.tab, sender.frameId);
-  }
-  // 更新图标
-  updateIcon()
-  // task log
-  if (msg.log && msg.task) {
-    setTimeout(async () => {
-      await findAndUpdateTaskResult(msg.task.id, {
-        action: msg.action,
-        title: msg.title,
-        content: msg.content,
-        timestamp: Date.now()
-      })
-    }, 50);
-  }
-  // 保存消息
-  switch (msg.action) {
-    case 'notice':
-    case 'priceProtectionNotice':
-    case 'couponReceived':
-    case 'goldCoinReceived':
-    case 'beanReceived':
-    case 'checkin_notice':
-      if (msg.test) {
-        break;
-      }
-      // 如果是单次任务完成的通知
-      if (msg.task && msg.task.onetimeKey) {
-        saveSetting(`task_onetime_${msg.task.onetimeKey}`, {
-          time: new Date(),
-          message: msg.message
-        })
-      }
-      let message = {
-        taskId: msg.task ? msg.task.id : null,
-        type: msg.type || msg.action || msg.text, // 通知的类型
-        batch: msg.batch, // 批次，通常是优惠券的属性
-        reward: msg.reward, // 奖励的类型
-        unit: msg.unit || msg.reward || msg.batch, // 奖励的单位
-        value: msg.value, // 奖励的数量
-        title: msg.title,
-        content: msg.content,
-        timestamp: Date.now()
-      }
-      let uuid = msg.uuid || Date.now()
-      updateUnreadCount(1)
-      setTimeout(async () => {
-        await newMessage(uuid, message);
-      }, 50);
-      setTimeout(async () => {
-        await updateMessages()
-      }, 3000);
-      break;
-  }
-  if (msg.action != 'saveAccount') {
-    log('message', msg.text, msg);
-  }
-  return true
-});
-
 Logline.keep(3);
-

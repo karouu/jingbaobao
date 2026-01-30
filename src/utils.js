@@ -30,6 +30,28 @@ export const getSetting = function (settingKey, defaultValue) {
 export const saveSetting = function (settingKey, value) {
   return localStorage.setItem(settingKey, JSON.stringify(value))
 }
+
+export const getSettingAsync = function (settingKey, defaultValue) {
+  return new Promise((resolve) => {
+    chrome.storage.local.get([settingKey], (result) => {
+      let val = result[settingKey];
+      // Try to parse if it was stored as string from legacy
+      if (typeof val === 'string') {
+        try { val = JSON.parse(val); } catch(e) {}
+      }
+      resolve(val !== undefined ? val : defaultValue);
+    });
+  });
+}
+
+export const saveSettingAsync = function (settingKey, value) {
+  return new Promise((resolve) => {
+    chrome.storage.local.set({ [settingKey]: value }, () => {
+      resolve();
+    });
+  });
+}
+
 export const readableTime = function (dateTime, withSeconds = false) {
   const mode = withSeconds ? DateTime.TIME_24_WITH_SECONDS : DateTime.TIME_SIMPLE
   if (DateTime.local().hasSame(dateTime, 'day')) {

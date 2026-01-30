@@ -1,5 +1,5 @@
 import 'weui';
-import weui from 'weui.js';
+import weui from './shim/weui.js';
 import { Chart } from '@antv/g2';
 
 // 获取设置

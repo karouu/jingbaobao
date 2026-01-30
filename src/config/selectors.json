@@ -1,0 +1,11 @@
+{
+  "tasks": {
+    "21": {
+      "selector": {
+        "target": ".coupon-item:last",
+        "result": ".mask .content",
+        "successKeyWord": "成功"
+      }
+    }
+  }
+}

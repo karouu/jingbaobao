@@ -214,6 +214,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         'loginFailed', 'option', 'runTask', 'findOrder', 'findGood', 'myTab'
     ];
 
+    // Ignore messages that are already forwarded to offscreen to prevent infinite loops
+    if (message.target === 'offscreen') {
+        return false;
+    }
+
     // Check if the message is a legacy action or explicitly targeted for offscreen
     // (but not ALARM_TRIGGERED which is internal)
     if (legacyActions.includes(message.action) || (message.target === 'offscreen_proxy')) {

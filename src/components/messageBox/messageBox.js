@@ -1,35 +1,50 @@
+import { createApp } from 'vue';
 import msgboxVue from './messageBox.vue';
-// 定义插件对象
+
 const MessageBox = {};
-// vue的install方法，用于定义vue插件
-MessageBox.install = function (Vue, options) {
-  const MessageBoxInstance = Vue.extend(msgboxVue);
-  let currentMsg;
+
+MessageBox.install = function (app) {
+  let currentMsgInstance = null;
+  let mountNode = null;
+  let appInstance = null;
+
   const initInstance = () => {
-    // 实例化vue实例
-    currentMsg = new MessageBoxInstance();
-    let msgBoxEl = currentMsg.$mount().$el;
-    document.body.appendChild(msgBoxEl);
+    mountNode = document.createElement('div');
+    document.body.appendChild(mountNode);
+    appInstance = createApp(msgboxVue);
+    currentMsgInstance = appInstance.mount(mountNode);
   };
-  // 在Vue的原型上添加实例方法，以全局调用
-  Vue.prototype.$msgBox = {
-    showMsgBox (options) {
-      if (!currentMsg) {
+
+  app.config.globalProperties.$msgBox = {
+    showMsgBox(options) {
+      if (!currentMsgInstance) {
         initInstance();
       }
       if (typeof options === 'string') {
-        currentMsg.content = options;
+        currentMsgInstance.content = options;
       } else if (typeof options === 'object') {
-        Object.assign(currentMsg, options);
+        Object.assign(currentMsgInstance, options);
       }
-//  Object.assign方法只会拷贝源对象自身的并且可枚举的属性到目标对象
-      return currentMsg.showMsgBox()
+
+      return currentMsgInstance.showMsgBox()
         .then(val => {
-          currentMsg = null;
+          if (appInstance) {
+             appInstance.unmount();
+             document.body.removeChild(mountNode);
+             appInstance = null;
+             currentMsgInstance = null;
+             mountNode = null;
+          }
           return Promise.resolve(val);
         })
         .catch(err => {
-          currentMsg = null;
+          if (appInstance) {
+             appInstance.unmount();
+             document.body.removeChild(mountNode);
+             appInstance = null;
+             currentMsgInstance = null;
+             mountNode = null;
+          }
           return Promise.reject(err);
         });
     }

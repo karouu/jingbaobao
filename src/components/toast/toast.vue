@@ -16,29 +16,13 @@
 export default {
   data() {
     return {
-    }
-  },
-  props: {
-    show: { // 是否显示此toast
-      default: false
-    },
-    text: { // 提醒文字
-      default: 'loading'
-    },
-    message: {
-      default: null
-    },
-    position: { // 提醒容器位置
-      default: 'center' //这里应该是middle 我没有改动画 所以暂时不用
-    },
-    isShowMask: { // 是否显示遮罩层
-      default: false
-    },
-    time: { // 显示时间
-      default: 1500
-    },
-    transition: { // 是否开启动画
-      default: true
+      show: false,
+      text: 'loading',
+      message: null,
+      position: 'center',
+      isShowMask: false,
+      time: 1500,
+      transition: true
     }
   },
   mounted() { // 时间控制
