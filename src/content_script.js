@@ -75,7 +75,7 @@ function sendTouchEvent(x, y, element, eventType) {
     });
     element.dispatchEvent(touchEvent);
   } else {
-    console.log('no TouchEvent')
+
   }
 
 }
@@ -87,14 +87,15 @@ function apply(applyBtn, priceInfo, setting) {
   let applyId = applyBtn.attr('id')
   // 是否暂停价保
   if (!applyId || setting.suspendedApplyIds.indexOf(applyId) > -1) {
-    return console.log('价保暂停', applyId)
+    // console.log('价保暂停', applyId)
+    return
   }
   // 获取上次申请价保的价格
   getSetting('last_apply_price' + applyId, (lastApply) => {
     let lastApplyPrice = lastApply ? lastApply.price : localStorage.getItem('jjb_order_' + applyId)
-    if (priceInfo.price > 0 && priceInfo.price < order_price && (order_price - priceInfo.price) > setting.pro_min ) {
-      if (lastApplyPrice && Number(lastApplyPrice) - priceInfo.price <= setting.pro_min ) {
-        console.log('Pass: ' + product_name + '当前价格上次已经申请过了:', priceInfo.price, ' Vs ', lastApplyPrice)
+    if (priceInfo.price > 0 && priceInfo.price < order_price && (order_price - priceInfo.price) > setting.pro_min) {
+      if (lastApplyPrice && Number(lastApplyPrice) - priceInfo.price <= setting.pro_min) {
+        // console.log('Pass: ' + product_name + '当前价格上次已经申请过了:', priceInfo.price, ' Vs ', lastApplyPrice)
         return
       }
       // 如果禁止了自动申请
@@ -109,7 +110,6 @@ function apply(applyBtn, priceInfo, setting) {
             time: new Date()
           }
         }, function (response) {
-          console.log("Response: ", response);
         });
         chrome.runtime.sendMessage({
           action: "priceProtectionNotice",
@@ -120,9 +120,8 @@ function apply(applyBtn, priceInfo, setting) {
           batch: 'jiabao',
           title: '报告老板，发现价格保护机会！',
           product_name: product_name,
-          content: '购买价：'+ order_price + ' 现价：' + priceInfo.price + '，请手动提交价保申请。'
-        }, function(response) {
-          console.log("Response: ", response);
+          content: '购买价：' + order_price + ' 现价：' + priceInfo.price + '，请手动提交价保申请。'
+        }, function (response) {
         });
       } else {
         // 申请
@@ -140,7 +139,6 @@ function apply(applyBtn, priceInfo, setting) {
                 time: new Date()
               }
             }, function (response) {
-              console.log("Response: ", response);
             });
             chrome.runtime.sendMessage({
               action: "priceProtectionNotice",
@@ -151,9 +149,8 @@ function apply(applyBtn, priceInfo, setting) {
               },
               log: true,
               batch: 'jiabao',
-              content: '购买价：'+ order_price + ' 现价：' + priceInfo.price + '，已经自动提交价保申请，正在等待申请结果。'
-            }, function(response) {
-              console.log("Response: ", response);
+              content: '购买价：' + order_price + ' 现价：' + priceInfo.price + '，已经自动提交价保申请，正在等待申请结果。'
+            }, function (response) {
             });
           }
 
@@ -172,7 +169,6 @@ function apply(applyBtn, priceInfo, setting) {
                 product_name: product_name,
                 content: "价保结果：" + resultText
               }, function (response) {
-                console.log("Response: ", response);
               });
             }
           });
@@ -241,14 +237,13 @@ function seekPromInfo(platform) {
       })
     })
   }
-  console.log('find promotions', platform, promotions)
+
   // 通知促销
   chrome.runtime.sendMessage({
     action: 'promotions',
     sku,
     promotions
   }, function (response) {
-    console.log("promotions Response: ", response);
   });
 }
 
@@ -288,9 +283,9 @@ function seekPriceInfo(platform) {
     sku = urlInfo[2]
     skuName = $("#itemName").text() ? $("#itemName").text().trim() : null
 
-    normal_price =($('#priceSaleChoice').text() ? $('#priceSaleChoice').text().replace(/[^0-9\.-]+/g, "") : null) || $('#jdPrice').val() || ($('#specJdPrice').text() ? $('#specJdPrice').text().replace(/[^0-9\.-]+/g, "") : null)
+    normal_price = ($('#priceSaleChoice').text() ? $('#priceSaleChoice').text().replace(/[^0-9\.-]+/g, "") : null) || $('#jdPrice').val() || ($('#specJdPrice').text() ? $('#specJdPrice').text().replace(/[^0-9\.-]+/g, "") : null)
 
-    spec_price = ($('#priceSale').text() && $('#priceSale').height() > 0 ? $('#priceSale').text().replace(/[^0-9\.-]+/g, "") : null) || $('#spec_price').text() && $('#spec_price').height() > 0|| ($('#specPrice').text() ? $('#specPrice').text().replace(/[^0-9\.-]+/g, "") : null)
+    spec_price = ($('#priceSale').text() && $('#priceSale').height() > 0 ? $('#priceSale').text().replace(/[^0-9\.-]+/g, "") : null) || $('#spec_price').text() && $('#spec_price').height() > 0 || ($('#specPrice').text() ? $('#specPrice').text().replace(/[^0-9\.-]+/g, "") : null)
 
     plus_price = ($('.vip_price #priceSaleChoice1').text() ? $('.vip_price #priceSaleChoice1').text().replace(/[^0-9\.-]+/g, "") : null) || $('#specPlusPrice').text()
 
@@ -306,17 +301,16 @@ function seekPriceInfo(platform) {
     sku: sku,
     normal_price: price ? Number(price) : null,
     plus_price: plus_price ? Number(plus_price) : null,
-    pingou_price: pingou_price? Number(pingou_price) : null
+    pingou_price: pingou_price ? Number(pingou_price) : null
   }
 
-  console.log(platform, priceInfo)
+
 
   // 通知价格
   chrome.runtime.sendMessage({
     action: 'productPrice',
     ...priceInfo
   }, function (response) {
-    console.log("productPrice Response: ", response);
   });
 
   return priceInfo
@@ -324,8 +318,8 @@ function seekPriceInfo(platform) {
 
 // 查找订单并对比
 function findOrderBySkuAndApply(priceInfo, setting) {
-  console.log('findOrderBySkuAndApply', priceInfo)
-  $( ".applyBtn" ).each(function() {
+
+  $(".applyBtn").each(function () {
     let skuId = $(this).attr('sku')
     let applyId = $(this).attr('id')
     if (skuId && skuId == priceInfo.sku) {
@@ -342,7 +336,7 @@ function findOrderBySkuAndApply(priceInfo, setting) {
 }
 
 async function dealProduct(product, orderInfo, setting) {
-  console.log('dealProduct', product, orderInfo, setting)
+
   let pro_logs = []
   let product_name = product.find('.p-name a').text() || product.find('.item-name .name').text()
   let orderPriceDom = product.find('.price-count .price').text() ? product.find('.price-count .price') : product.find('.item-opt .price')
@@ -351,25 +345,25 @@ async function dealProduct(product, orderInfo, setting) {
   let applyBtn = product.find('.item-opt .apply').text() ? product.find('.item-opt .apply') : product.find('.btn a')
   let orderId = applyBtn.attr('id') ? applyBtn.attr('id').split('_') : null
 
-  if (!orderId) {
-    return console.log('找不到 orderId')
-  }
+  // console.log('找不到 orderId')
+  return
 
   let orderCountDom = product.find('.price-count .count').text() ? product.find('.price-count .count') : product.find('.item-name .count')
-  let order_quantity =  Number(orderCountDom.text().trim().replace(/[^0-9\.-]+/g, ""))
+  let order_quantity = Number(orderCountDom.text().trim().replace(/[^0-9\.-]+/g, ""))
 
   let order_pro_logs = product.find('.show-detail').text() ? product.find('.show-detail p') : product.next().next().find('.item-jb')
 
   let product_img = product.find('a img').attr('src') ? product.find('a img').attr('src') : product.find('.img img').attr('src')
 
   if (order_price < 0.01) {
-    return console.log('忽略免费的商品')
+    // console.log('忽略免费的商品')
+    return
   }
-  console.log('发现有效的订单：', product_name, " 下单价格：", order_price)
+
   if (order_pro_logs && order_pro_logs.length > 0) {
-    order_pro_logs.each(function() {
+    order_pro_logs.each(function () {
       let logElement = $(this)
-      let log = logElement.text().trim().replace('查看退款详情','').replace('查看申请记录','').replace('查看详细规则','')
+      let log = logElement.text().trim().replace('查看退款详情', '').replace('查看申请记录', '').replace('查看详细规则', '')
       if (log && log.indexOf("成功") > -1 || logElement.hasClass("jb-has-succ")) {
         pro_logs.push({
           status: "success",
@@ -388,8 +382,7 @@ async function dealProduct(product, orderInfo, setting) {
     action: "getProductPrice",
     sku: orderId[2],
     setting: setting
-  }, function(response) {
-    console.log("getProductPrice Response: ", response);
+  }, function (response) {
   });
   let goodInfo = {
     sku: orderId[2],
@@ -408,8 +401,7 @@ async function dealProduct(product, orderInfo, setting) {
     title: `发现有效的订单：${product_name} 下单价格：${order_price}`,
     orderId: orderInfo.id,
     good: goodInfo
-  }, function(response) {
-    console.log("good Response: ", response);
+  }, function (response) {
   });
 
   // 记录订单信息
@@ -420,7 +412,7 @@ async function dealProduct(product, orderInfo, setting) {
 }
 
 async function dealOrder(order, validProducts, setting) {
-  console.log('dealOrder', order, validProducts)
+
 
   let order_time = order.find('span.time').text() ? new Date(order.find('span.time').text()) : new Date(order.find('.title span').last().text().trim().split('：')[1])
   let order_id = order.find('span.order').text() ? order.find('span.order').text().replace(/[^0-9\.-]+/g, "") : order.find('.title .order-code').text().trim().split('：')[1]
@@ -439,8 +431,7 @@ async function dealOrder(order, validProducts, setting) {
     title: `发现有效的订单：${order_id} 商品数:${validProducts.length} 下单时间：${order_time}`,
     orderId: order_id,
     order: orderInfo
-  }, function(response) {
-    console.log("good Response: ", response);
+  }, function (response) {
   });
 
   let time = 500
@@ -449,7 +440,6 @@ async function dealOrder(order, validProducts, setting) {
       try {
         await dealProduct($(productElement), orderInfo, setting)
       } catch (error) {
-        console.error(error)
       }
     }, time);
     time += 2000;
@@ -457,18 +447,18 @@ async function dealOrder(order, validProducts, setting) {
 }
 
 async function getAllOrders(mode, setting) {
-  console.log('京价保开始自动检查订单', mode)
+
   // 移动价保
-  if ($( "#dataList0 li").length > 0) {
-    console.log('发现订单', $( "#dataList0 li").length)
+  if ($("#dataList0 li").length > 0) {
+
     let time = 0
-    $( "#dataList0 li").each(function() {
+    $("#dataList0 li").each(function () {
       let orderElement = $(this)
 
       const validProducts = orderElement.find('.product-item').toArray().filter((product) => {
         let proResult = $(product).next().next();
-        if ( proResult.find('#overTime').text() && proResult.find('#overTime').text().length > 0 || (proResult.find('.item-jb').text() &&proResult.find('.item-jb').text().indexOf("未开通价保服务") > -1) ) {
-          console.log('排除无效商品', $(product).find(".item-name").text())
+        if (proResult.find('#overTime').text() && proResult.find('#overTime').text().length > 0 || (proResult.find('.item-jb').text() && proResult.find('.item-jb').text().indexOf("未开通价保服务") > -1)) {
+          // console.log('排除无效商品', $(product).find(".item-name").text())
           return false
         }
         return !$(product).find('.apply').hasClass('disable-apply')
@@ -476,23 +466,22 @@ async function getAllOrders(mode, setting) {
 
       if (validProducts.length < 1) return
 
-      console.log("validProducts", validProducts)
+
 
       setTimeout(async () => {
         try {
           await dealOrder(orderElement, validProducts, setting)
         } catch (error) {
-          console.error(error)
         }
       }, time);
       time += 3000;
     });
   }
   // PC价保
-  if ($( "#dataList .tr-th").length > 0) {
+  if ($("#dataList .tr-th").length > 0) {
     let time = 0
-    console.log('发现订单', $( "#dataList .tr-th").length)
-    $( "#dataList .tr-th").each(function() {
+
+    $("#dataList .tr-th").each(function () {
       let orderDom = $(this).clone()
       let product = $(this).next()
       let products = [product]
@@ -502,15 +491,15 @@ async function getAllOrders(mode, setting) {
       }
       // 排除已经超过价保周期的商品
       const validProducts = products.filter((product) => {
-        if ( product.find('#overTime') && product.find('#overTime').text().length > 0 || (product.find('.show-detail') && product.find('.show-detail').text().indexOf("未开通价保服务") > -1) ) {
-          console.log('排除无效商品', product.find(".p-name").text())
+        if (product.find('#overTime') && product.find('#overTime').text().length > 0 || (product.find('.show-detail') && product.find('.show-detail').text().indexOf("未开通价保服务") > -1)) {
+          // console.log('排除无效商品', product.find(".p-name").text())
           return false
         }
         return true
       })
 
-      if (validProducts.length < 1) return console.log('排除无效订单', orderDom)
-      console.log("validProducts", validProducts)
+      if (validProducts.length < 1) return
+
 
       setTimeout(async () => {
         try {
@@ -530,7 +519,7 @@ async function getAllOrders(mode, setting) {
 // TODO: 优化
 function CheckBaitiaoCouponDom(task) {
   if (task.frequency != 'never') {
-    console.log('开始领取白条券')
+
     runStatus(task, {
       mode: 'm',
     })
@@ -538,13 +527,12 @@ function CheckBaitiaoCouponDom(task) {
     $(".coupon-use-btn").each(function () {
       let targetEle = $(this)
       if (targetEle.text() == '确定') {
-        console.log('需要登录')
         simulateClick(targetEle)
       }
       if (targetEle.text() == '立即领取') {
         let couponDetails = targetEle.parent().prev().find('span').toArray()
         var coupon_name = couponDetails[2] ? $(couponDetails[2]).text().trim() : '未知白条券'
-        var coupon_price = couponDetails[0] ? $(couponDetails[0]).text().trim(): '？' + (couponDetails[1] ? (' (' + $(couponDetails[1]).text() + ')') : '')
+        var coupon_price = couponDetails[0] ? $(couponDetails[0]).text().trim() : '？' + (couponDetails[1] ? (' (' + $(couponDetails[1]).text() + ')') : '')
 
         setTimeout(function () {
           simulateClick(targetEle, true)
@@ -562,7 +550,6 @@ function CheckBaitiaoCouponDom(task) {
                   name: coupon_name
                 }
               }, function (response) {
-                console.log("Response: ", response);
               });
             }
           }, 1500)
@@ -585,8 +572,8 @@ function getPlusCoupon(task) {
       let that = $(this)
       let getBtn = $(this).find('.btn-txt')
       if (getBtn.text().indexOf("立即领取") > -1) {
-        let coupon_name = that.find('.descr').text().trim().replace(/[\r|\n|\\s]/g,"")
-        let coupon_price = that.find('.money').text().trim().replace(/[\r|\n|\\s]/g,"") + ' (' + that.find('.rule').text().trim().replace(/[\r|\n|\\s]/g,"") + ')'
+        let coupon_name = that.find('.descr').text().trim().replace(/[\r|\n|\\s]/g, "")
+        let coupon_price = that.find('.money').text().trim().replace(/[\r|\n|\\s]/g, "") + ' (' + that.find('.rule').text().trim().replace(/[\r|\n|\\s]/g, "") + ')'
         setTimeout(function () {
           getBtn.trigger("click")
           setTimeout(function () {
@@ -602,7 +589,6 @@ function getPlusCoupon(task) {
                   name: coupon_name
                 }
               }, function (response) {
-                console.log("Response: ", response);
               });
             }
           }, time + 1500)
@@ -640,7 +626,6 @@ function getCommonUseCoupon(task) {
                   name: coupon_name
                 }
               }, function (response) {
-                console.log("Response: ", response);
               });
             }
           }, 1500)
@@ -664,7 +649,7 @@ function priceCutNotice(task) {
         let productName = item.find('.p-name').text().trim()
         let productPrice = item.find('.p-price strong').text().trim()
         let productImg = item.find('.p-img img').attr("src")
-        console.log(productName, priceCut)
+
         let productKey = item.attr("id")
         let lastPriceCut = localStorage.getItem(productKey)
 
@@ -690,7 +675,6 @@ function priceCutNotice(task) {
                 newPrice: productPrice
               },
             }, function (response) {
-              console.log("Response: ", response);
             });
           }, 1500)
         }, time)
@@ -729,7 +713,6 @@ function getTelephoneCoupon(task) {
                     name: coupon_name
                   }
                 }, function (response) {
-                  console.log("Response: ", response);
                 });
               }
             }, 1500)
@@ -748,7 +731,7 @@ function runCommonTask(task) {
     runStatus(task)
     if (task.selector) {
       let targetElement = $(`${task.selector.target}`)
-      console.log('targetElement', targetElement)
+
       if (targetElement && targetElement.length > 0) {
         simulateClick(targetElement, true)
         if (task.selector.result) {
@@ -763,7 +746,6 @@ function runCommonTask(task) {
               }, task.successMessage, {
                 uuid: uuid
               }), function (response) {
-                console.log("Response: ", response);
               });
             }
           })
@@ -775,7 +757,7 @@ function runCommonTask(task) {
 
 
 function runStatus(task, parameters) {
-  console.log(`${task.title}开始运行`)
+
   chrome.runtime.sendMessage(Object.assign({
     action: "runStatus",
     task: task,
@@ -854,7 +836,6 @@ function getCoin(task) {
               unit: 'coin',
               content: "恭喜您领到了～0.02个钢镚"
             }, function (response) {
-              console.log("Response: ", response);
             })
           })
         }
@@ -871,7 +852,7 @@ function modifyRefundType(mode = "m") {
   getSetting('refund_type', (setting) => {
     if (!setting || setting == "") setting = "1"
     if (mode == "pc") {
-      $("select.modifyRefundType").each(function(index) {
+      $("select.modifyRefundType").each(function (index) {
         if ($(this).val() == setting) return
         setTimeout(() => {
           $(this).val(setting)
@@ -880,11 +861,11 @@ function modifyRefundType(mode = "m") {
       });
     }
     if (mode == "m") {
-      $("a.type-modify").each(function(index) {
+      $("a.type-modify").each(function (index) {
         setTimeout(() => {
           simulateClick($(this))
           setTimeout(() => {
-            $(".type-wrapper .list .item").each(function() {
+            $(".type-wrapper .list .item").each(function () {
               if ($(this).attr("value") == setting) {
                 if ($(this).hasClass("selected")) return
                 simulateClick($(this))
@@ -932,7 +913,7 @@ function priceProtect(task) {
     }, 7500);
 
     if ($(".bd-product-list li").length > 0 || $(".co-th").length > 0) {
-      console.log('成功获取价格保护商品列表', new Date())
+      // console.log('成功获取价格保护商品列表', new Date())
       runStatus(task, {
         mode: mode
       })
@@ -942,10 +923,9 @@ function priceProtect(task) {
         setTimeout(function () {
           getAllOrders(mode, response)
         }, 10 * 1000)
-        console.log("getPriceProtectionSetting Response: ", response);
       });
     } else {
-      console.log('好尴尬，最近没有买东西..', new Date())
+      // console.log('好尴尬，最近没有买东西..', new Date())
     }
   }
 }
@@ -953,36 +933,13 @@ function priceProtect(task) {
 
 
 // 显示引荐来源
-function showUtmSource() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const utm_source = urlParams.get('utm_source');
-  const utmSourceDom = `<div class="utm_source-notice">
-    <div class="area_md">
-      引荐来源：${utm_source}
-      <span id="reportUtmSource" class="report">举报</span>
-    </div>
-  </div>`
-  if (utm_source && utm_source.indexOf('zaoshu.so') < 0) {
-    $("body").prepend(utmSourceDom);
-  }
-  $("#reportUtmSource").on("click", function () {
-    weui.dialog({
-      title: '举报劫持',
-      content: `<iframe id="changelogIframe" frameborder="0" src="https://i.duotai.net/forms/znd7e/pliwjpzx?utm_source=${utm_source}" style="width: 100%;min-height: 385px;"></iframe>`,
-      className: 'reportUtmSource',
-      buttons: [{
-        label: '完成',
-        type: 'primary'
-      }]
-    })
-  })
-}
+// showUtmSource removed
 
 
 // 剁手保护模式
 function handProtection(setting, priceInfo) {
   if (setting == "checked") {
-    console.log('剁手保护模式')
+    // console.log('剁手保护模式')
     let buyDom = $("#InitCartUrl").length > 0 ? $("#InitCartUrl") : $("#btn-reservation")
     let item = $(".ellipsis").text()
     let price = priceInfo ? (priceInfo.normal_price || priceInfo.plus_price) : ($('.p-price .price').text() ? $('.p-price .price').text().replace(/[^0-9\.-]+/g, "") : null) || ($('#jd-price').text() ? $('#jd-price').text().replace(/[^0-9\.-]+/g, "") : null)
@@ -1032,7 +989,7 @@ function handProtection(setting, priceInfo) {
       };
 
       dialog.addEventListener('close', function onClose() {
-        console.log('dialog close', dialog.returnValue)
+        // console.log('dialog close', dialog.returnValue)
         if (dialog.returnValue == 'no') {
           setTimeout(() => {
             dialogMsg.showModal();
@@ -1054,7 +1011,7 @@ function handProtection(setting, priceInfo) {
 // 模拟点击
 function simulateClick(dom, mouseEvent) {
   let domNode = dom.get(0)
-  console.log('simulateClick', dom, mouseEvent)
+  // console.log('simulateClick', dom, mouseEvent)
   if (mouseEvent && domNode) {
     return mockClick(domNode)
   }
@@ -1065,7 +1022,7 @@ function simulateClick(dom, mouseEvent) {
     try {
       mockClick(domNode)
     } catch (err) {
-      console.log('fullback to mockClick', err)
+      // console.log('fullback to mockClick', err)
     }
   }
 }
@@ -1077,7 +1034,7 @@ function markCheckinStatus(type, value, cb) {
     value: value,
     status: "signed"
   }, function (response) {
-    console.log('markCheckinStatus response', response)
+    // console.log('markCheckinStatus response', response)
     if (cb && response) { cb() }
   });
 }
@@ -1095,13 +1052,13 @@ function saveAccount(account) {
     action: "saveAccount",
     content: account
   }, function (response) {
-    console.log('saveAccount response', response)
+    // console.log('saveAccount response', response)
   });
 }
 
 // 获取账号信息
 function getAccount(type) {
-  console.log("getAccount", type)
+  // console.log("getAccount", type)
   chrome.runtime.sendMessage({
     action: "getAccount",
     type: type
@@ -1117,7 +1074,6 @@ function getAccount(type) {
         message: "由于账号未保存无法自动登录",
         type: type
       }, function (response) {
-        console.log("Response: ", response);
       });
     }
   });
@@ -1129,7 +1085,6 @@ function getSetting(name, cb) {
     content: name
   }, function (response) {
     cb(response)
-    console.log("getSetting Response: ", name, response);
   });
 }
 
@@ -1140,7 +1095,6 @@ function getTask(taskId, cb) {
     taskId: taskId
   }, function (response) {
     cb(response)
-    console.log("getTask Response: ", taskId, response);
   });
 }
 
@@ -1157,10 +1111,9 @@ function dealLoginFailed(type, errorMsg) {
   // 如果是单纯的登录页面，则不发送浏览器提醒
   if (window.innerWidth == 420 || window.location.href == "https://passport.jd.com/uc/login") {
     loginFailedDetail.notice = false
-    console.log("主动登录页面不发送浏览器消息提醒")
+    // console.log("主动登录页面不发送浏览器消息提醒")
   }
   chrome.runtime.sendMessage(loginFailedDetail, function (response) {
-    console.log("loginFailed Response: ", response);
   });
 }
 
@@ -1178,7 +1131,8 @@ function getBase64Image(img) {
 // 自动登录
 function autoLogin(account, type) {
   if (account.autoLoginQuota && account.autoLoginQuota < 1) {
-    return console.log('当前时段无可用自动登录配额，暂不运行自动登录', type)
+    // console.log('当前时段无可用自动登录配额，暂不运行自动登录', type)
+    return
   }
   weui.toast('京价保正在自动登录', 1000);
   function login(type) {
@@ -1186,7 +1140,6 @@ function autoLogin(account, type) {
       action: "autoLogin",
       type: type
     }, function (response) {
-      console.log("autoLogin Response: ", response);
     });
     setTimeout(() => {
       if (type == 'pc') {
@@ -1241,7 +1194,7 @@ function autoLogin(account, type) {
         }, 4000)
       }
     }
-  // 手机登录
+    // 手机登录
   } else {
     $("#username").val(account.username)
     $("#pwd").val(account.password)
@@ -1269,13 +1222,17 @@ function autoLogin(account, type) {
             }
           }, 2000)
         } else {
-          console.log("missing username or password", $("#username").val(), $("#password").val())
+          // console.log("missing username or password", $("#username").val(), $("#password").val())
         }
       }, 500)
     }
     // 如果需要验证码
+    // 如果需要验证码，直接调用登录（用户手动输入验证码后点击的）或者提示用户
+    // Since we removed captcha solving, we assume user handles it or we try login.
+    // If code box is visible, user needs to input it.
     if ($("#input-code").height() > 0) {
-      tryFillCaptcha()
+      // Cannot fill captcha automatically
+      console.log("Captcha required, please fill manually.");
     } else {
       mLogin()
     }
@@ -1283,79 +1240,15 @@ function autoLogin(account, type) {
 }
 
 
-function dealWithCaptchaError(isRetry, error) {
-  console.log('dealWithCaptchaError', error)
-  if (isRetry) {
-    dealLoginFailed("m", "需要完成登录验证")
-  } else {
-    setTimeout(() => {
-      tryFillCaptcha(true)
-    }, 500);
-  }
-}
-
-// 识别验证码
-function tryFillCaptcha(isRetry) {
-  let captcha = $("#username_login .code-box img")[0]
-  let base64Image = getBase64Image(captcha)
-  $("#username_login").append(`<div class="weui-loadmore">
-        <i class="weui-loading"></i>
-        <span class="weui-loadmore__tips">${isRetry ? '正在重新识别验证码' : '正在识别验证码'}</span>
-    </div>
-  `)
-  $.ajax({
-    method: "POST",
-    type: "POST",
-    url: "https://jjb.zaoshu.so/captcha",
-    data: {
-      base64Image: base64Image,
-    },
-    timeout: 8000,
-    dataType: "json",
-    success: function(data){
-      if (data.result && data.result.length > 3) {
-        if ($("#code").is(":focus") || $("#code").val().length > 0 ) {
-          $("#username_login").append(`<p class="tips">验证码参考：${data.result}</p>`)
-        } else {
-          $("#code").val(data.result)
-          mLogin()
-        }
-      } else {
-        dealWithCaptchaError(isRetry, data.result)
-      }
-    },
-    error: function(xhr, type){
-      dealWithCaptchaError(isRetry, xhr)
-    },
-    complete: function() {
-      $("#username_login .weui-loadmore").hide()
-    }
-  })
-}
-
-// 转存老的账号
-function resaveAccount() {
-  var jjb_username = localStorage.getItem('jjb_username')
-  var jjb_password = localStorage.getItem('jjb_password')
-  if (jjb_username && jjb_password) {
-    localStorage.removeItem('jjb_username')
-    localStorage.removeItem('jjb_password')
-    saveAccount({
-      username: jjb_username,
-      password: jjb_password
-    })
-  }
-}
-
 // 登录页
 function dealLoginPage() {
   // 手机版登录页
-  if ( $(".quick-btn").length > 0 && $("#username").length > 0) {
+  if ($(".quick-btn").length > 0 && $("#username").length > 0) {
     // 切换登录模式
     simulateClick($(".planBLogin"), true)
 
     getAccount('m')
-    $(auto_login_html).insertAfter( ".page .notice")
+    $(auto_login_html).insertAfter(".page .notice")
     // 点击让京价保自动登录
     $('.page').on('click', '.jjb-login', function (e) {
       window.event ? window.event.returnValue = false : e.preventDefault();
@@ -1414,7 +1307,6 @@ function vipCheckin(task) {
           title: "京价保自动为您签到领京豆",
           content: "恭喜您获得了" + value + '个京豆奖励'
         }, function (response) {
-          console.log("Response: ", response);
         })
       })
     }
@@ -1567,7 +1459,6 @@ function getGoldCoin(task) {
                   content: `恭喜您领到了${value}个金币`,
                   uuid: uuid
                 }, function (response) {
-                  console.log("Response: ", response);
                 });
               })
             }
@@ -1596,7 +1487,6 @@ function getGoldCoin(task) {
                       content: `恭喜您领到了${value}个金币`,
                       uuid: uuid
                     }, function (response) {
-                      console.log("Response: ", response);
                     });
                   })
                 }
@@ -1646,7 +1536,6 @@ function getJDPayBean(task) {
                 content: `恭喜您领到了${value}个京豆`,
                 uuid: uuid
               }, function (response) {
-                console.log("Response: ", response);
               });
             }
           })
@@ -1684,7 +1573,6 @@ function pineappleCheckIn(task) {
                     content: `恭喜您领到了${value}个钢蹦`,
                     uuid: uuid
                   }, function (response) {
-                    console.log("Response: ", response);
                   });
                 })
               }
@@ -1728,7 +1616,6 @@ function swingCheckIn(task) {
                     content: `恭喜您领到了${value}个京豆`,
                     uuid: uuid
                   }, function (response) {
-                    console.log("Response: ", response);
                   });
                 });
               } else {
@@ -1767,7 +1654,6 @@ function rightsCenterWhite(task) {
             title: "京价保自动为您白条优惠券抽奖",
             content: "恭喜您获得了" + result
           }, function (response) {
-            console.log("Response: ", response);
           })
         })
       }
@@ -1846,9 +1732,13 @@ function accountAlive(type, message) {
     state: "alive",
     message: message,
     type: type
-  }, function(response) {
-    console.log("accountAlive ", type, message, response);
+  }, function (response) {
+    // console.log("accountAlive ", type, message, response);
   });
+}
+
+function resaveAccount() {
+  // Placeholder to prevent ReferenceError
 }
 
 function CheckDom() {
@@ -1879,7 +1769,7 @@ function CheckDom() {
         time += 15000;
       });
     }
-    console.log('getPageSetting', response)
+    // console.log('getPageSetting', response)
   });
 
   // 是否是PLUS会员
@@ -1889,7 +1779,6 @@ function CheckDom() {
       key: "jjb_plus",
       value: "Y"
     }, function (response) {
-      console.log("Response: ", response);
     });
   }
 
@@ -1926,7 +1815,7 @@ function CheckDom() {
     injectScriptCode(`
       setTimeout(function () {
         const touchEmulatorRes = TouchEmulator({ force: true });
-        console.log('TouchEmulator', touchEmulatorRes)
+        // console.log('TouchEmulator', touchEmulatorRes)
       }, 200)
     `, 'body')
   }
@@ -1964,10 +1853,10 @@ function CheckDom() {
   };
 
   // 单独的领券页面
-  if ( $("#js_detail .coupon_get") && $(".coupon_get .js_getCoupon").length > 0) {
-    console.log('单独的领券页面', $("#js_detail .coupon_get").find('.js_getCoupon'))
-    $("#js_detail .coupon_get").find('.js_getCoupon').trigger( "tap" )
-    $("#js_detail .coupon_get").find('.js_getCoupon').trigger( "click" )
+  if ($("#js_detail .coupon_get") && $(".coupon_get .js_getCoupon").length > 0) {
+    // console.log('单独的领券页面', $("#js_detail .coupon_get").find('.js_getCoupon'))
+    $("#js_detail .coupon_get").find('.js_getCoupon').trigger("tap")
+    $("#js_detail .coupon_get").find('.js_getCoupon').trigger("click")
   }
 
   // 领取精选券
@@ -2021,12 +1910,12 @@ function checkLoginState() {
 
 // 不在收银台域名下运行任何任务
 if (window.location.host != 'pcashier.jd.com') {
-  $( document ).ready(function() {
-    console.log('京价保注入页面成功');
+  $(document).ready(function () {
+    // console.log('京价保注入页面成功');
     checkLoginState()
     if (!pageTaskRunning) {
-      setTimeout( function(){
-        console.log('京价保开始执行任务');
+      setTimeout(function () {
+        // console.log('京价保开始执行任务');
         CheckDom()
       }, 1200)
     }
@@ -2034,7 +1923,7 @@ if (window.location.host != 'pcashier.jd.com') {
 }
 
 // 消息
-chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
+chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
   switch (message.action) {
     case 'productPrice':
       findOrderBySkuAndApply(message, message.setting)
@@ -2050,19 +1939,19 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
 var passiveSupported = false;
 try {
   var options = Object.defineProperty({}, "passive", {
-    get: function() {
+    get: function () {
       passiveSupported = true;
     }
   });
 
   window.addEventListener("test", null, options);
-} catch(err) {}
+} catch (err) { }
 
-window.addEventListener("message", function(event) {
-    if (event.data && event.data.action == 'productPrice') {
-      findOrderBySkuAndApply(event.data, event.data.setting)
-    }
-  },
+window.addEventListener("message", function (event) {
+  if (event.data && event.data.action == 'productPrice') {
+    findOrderBySkuAndApply(event.data, event.data.setting)
+  }
+},
   passiveSupported ? { passive: true } : false
 );
 

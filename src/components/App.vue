@@ -63,27 +63,6 @@
               }}</span>
             </div>
             </div>
-            <div
-              :class="
-                `weui-navbar__item zaoshu-tab ${
-                  contentType == 'discounts' ? 'weui-bar__item_on' : ''
-                }`
-              "
-              @click="switchContentType('discounts')"
-            >
-            <div class="nav-item">
-              <img
-                src="../../static/image/zaoshu.png"
-                alt=""
-                class="zaoshu-icon"
-              />
-              枣树集惠
-              <span
-                class="weui-badge weui-badge_dot new-discounts"
-                v-if="newDiscounts"
-              ></span>
-            </div>
-            </div>
           </div>
         <div class="weui-tab">
           <div class="weui-tab__panel">
@@ -204,7 +183,7 @@
                           <p v-if="good.sku">
                             <a
                               v-if="!disableOrderLink"
-                              :href="`https://jjb.zaoshu.so/good/${good.sku}`"
+                              :href="`https://item.jd.com/${good.sku}.html`"
                               target="_blank"
                               >{{ good.name }}</a
                             >
@@ -356,7 +335,7 @@
                         >{{message.coupon.name}}</a>
                         <a
                           v-else
-                          href="https://jjb.zaoshu.so/event/jdc?e=0&p=AyIPZRprFDJWWA1FBCVbV0IUWVALHFRBEwQAQB1AWQkrW1N8UGM3WyZ1VmxSCHMIE1dEbytsKxkOfARUG1IJAhMbVR5KFQsZBFUQWhAyEQ5UH10XARcFZRhYFAQRN2UbWiVJfAZlG1sdBhEBXR5dFDISA1cTXxUBFwBQG1McMhU3F18ES1kiN2UrayUCEjdVKwRRX08%3D&t=W1dCFFlQCxxUQRMEAEAdQFkJ"
+                          href="#"
                           target="_blank"
                         >{{message.coupon.name}}</a>
                       </div>
@@ -374,7 +353,7 @@
                           <p v-if="message.content.product">
                             <a
                               v-if="!disableOrderLink"
-                              :href="`https://jjb.zaoshu.so/good/${message.content.product.sku}`"
+                              :href="`https://item.jd.com/${message.content.product.sku}.html`"
                               target="_blank"
                               >{{ message.content.product.name }}</a>
                             <a v-else>{{ message.content.product.name }}</a>
@@ -401,9 +380,7 @@
               </div>
               <div class="no_message" v-else>暂时还没有未读消息</div>
             </div>
-            <keep-alive>
-            <discounts v-if="contentType == 'discounts'"/>
-            </keep-alive>
+
           </div>
         </div>
         <div class="bottom">
@@ -560,7 +537,6 @@ Vue.directive("tippy", {
 });
 
 import loginNotice from "./login-notice.vue";
-import discounts from "./discounts.vue";
 import settings from "./settings.vue";
 import guide from "./guide.vue";
 import popup from "./popup.vue";
@@ -568,7 +544,7 @@ import weDialog from "./we-dialog.vue";
 
 export default {
   name: "App",
-  components: { loginNotice, discounts, settings, guide, popup, weDialog },
+  components: { loginNotice, settings, guide, popup, weDialog },
   data() {
     return {
       messages: [],
@@ -576,7 +552,6 @@ export default {
       skuPriceList: {},
       dialog: {},
       stateText: stateText,
-      newDiscounts: false,
       loadingOrder: false,
       showPopup: true,
       showDialog: false,
@@ -617,10 +592,7 @@ export default {
     setTimeout(() => {
       this.renderOrders();
     }, 50);
-    // 查询最新优惠
-    setTimeout(() => {
-      this.getLastDiscount();
-    }, 100);
+
     // 渲染通知
     setTimeout(() => {
       this.renderMessages();
@@ -655,80 +627,16 @@ export default {
   },
   methods: {
     checkUpdate: async function() {
-      // 查询最新版本
-      $.getJSON(
-        `https://jjb.zaoshu.so/updates?buildid=${process.env.BUILDID}&browser=${process.env.BROWSER}`,
-        function(lastVersion) {
-          if (!lastVersion) return localStorage.removeItem("newVersion");
-          let skipBuildId = localStorage.getItem("skipBuildId");
-          let localBuildId = skipBuildId || process.env.BUILDID;
-          // 如果有新版
-          if (localBuildId < lastVersion.buildId && lastVersion.notice) {
-            localStorage.setItem("newVersion", lastVersion.versionCode);
-            // 如果新版是主要版本，而且当前版本需要被提示
-            if (lastVersion.major && localBuildId < lastVersion.noticeBuildId) {
-              this.dialog = {
-                title:
-                  `${lastVersion.title} <span class="dismiss">&times;</span>` ||
-                  "京价保有版本更新",
-                content:
-                  `${lastVersion.changelog}
-            <div class="changelog">
-              <span class="time">${lastVersion.time}</span>` +
-                  (lastVersion.blogUrl
-                    ? `<a class="blog" href="${lastVersion.blogUrl}" target="_blank">了解更多</a>`
-                    : "") +
-                  `</div>`,
-                className: "update",
-                buttons: [
-                  {
-                    label: "不再提醒",
-                    type: "default",
-                    onClick: function() {
-                      localStorage.setItem("skipBuildId", lastVersion.buildId);
-                    },
-                  },
-                  {
-                    label: "下载更新",
-                    type: "primary",
-                    onClick: function() {
-                      chrome.tabs.create({
-                        url:
-                          lastVersion.downloadUrl ||
-                          `https://jjb.zaoshu.so/updates/latest?browser=${process.env.BROWSER}`,
-                      });
-                    },
-                  },
-                ],
-              };
-              this.showDialog = true;
-            }
-          } else {
-            localStorage.removeItem("newVersion");
-          }
-        }
-      );
+        // Update check disabled
+        localStorage.removeItem("newVersion");
     },
-    getLastDiscount: async function() {
-      let response = await fetch("https://jjb.zaoshu.so/discount/last");
-      let lastDiscount = await response.json();
-      let readDiscountAt = localStorage.getItem("readDiscountAt");
-      if (
-        !readDiscountAt ||
-        new Date(lastDiscount.createdAt) > new Date(readDiscountAt)
-      ) {
-        this.newDiscounts = true;
-      }
-    },
+
     switchContentType: function(type) {
       this.contentType = type;
       switch (type) {
         case "messages":
           this.renderMessages();
           this.readMessages();
-          break;
-        case "discounts":
-          this.readDiscounts();
           break;
         case "orders":
           this.renderOrders();
@@ -753,9 +661,6 @@ export default {
           console.log("Response: ", response);
         }
       );
-    },
-    readDiscounts: function() {
-      this.newDiscounts = false;
     },
     getPromotions: function() {
       let promotions = getSetting("promotions", []);
@@ -886,7 +791,7 @@ export default {
       this.dialog = {
         title: "更新记录",
         content: `
-          <iframe id="changelogIframe" frameborder="0" src="https://jjb.zaoshu.so/changelog?buildId=${process.env.BUILDID}&browser=${process.env.BROWSER}" style="width: 100%;min-height: 350px;"
+          <iframe id="changelogIframe" frameborder="0" src="" style="width: 100%;min-height: 350px;"
           ></iframe>
         `,
         className: "changelog",

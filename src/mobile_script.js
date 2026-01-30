@@ -1,4 +1,4 @@
-var actualCode =  '(' + function() {
+(function () {
     'use strict';
     /**
      * Creates a read/writable property which returns a function set for write/set (assignment)
@@ -50,7 +50,7 @@ var actualCode =  '(' + function() {
             initObj;
 
         if (objBase && objScopeName in objBase && propName in objBase[objScopeName]) {
-            if(typeof initValue === "undefined") {
+            if (typeof initValue === "undefined") {
                 initValue = objBase[objScopeName][propName];
             }
 
@@ -63,7 +63,7 @@ var actualCode =  '(' + function() {
                 initObj[propName] = newProp;
                 try {
                     objBase[objScopeName] = Object.create(objBase[objScopeName], initObj);
-                } catch(e) {
+                } catch (e) {
                     // Workaround, but necessary to overwrite native host objects
                 }
             }
@@ -74,9 +74,4 @@ var actualCode =  '(' + function() {
     if (window.location.href.indexOf("/pc/") < 0) {
         window.navigator.userAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 9_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/10.2 Mobile/15E148 Safari/604.1 jdjr-app ios';
     }
-} + ')();';
-
-var s = document.createElement('script');
-s.textContent = actualCode;
-document.documentElement.appendChild(s);
-s.remove();
+})();

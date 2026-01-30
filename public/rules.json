@@ -1,0 +1,29 @@
+[
+    {
+        "id": 1,
+        "priority": 1,
+        "action": {
+            "type": "modifyHeaders",
+            "responseHeaders": [
+                {
+                    "header": "x-frame-options",
+                    "operation": "remove"
+                },
+                {
+                    "header": "frame-options",
+                    "operation": "remove"
+                }
+            ]
+        },
+        "condition": {
+            "urlFilter": "*",
+            "domains": [
+                "jd.com",
+                "jd.hk"
+            ],
+            "resourceTypes": [
+                "sub_frame"
+            ]
+        }
+    }
+]

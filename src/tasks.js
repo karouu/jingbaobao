@@ -40,7 +40,7 @@ const tasks = [
     location: {
       host: ['pcsitepp-fm.jd.com', 'msitepp-fm.jd.com']
     },
-    rateLimit:{
+    rateLimit: {
       weekly: 55,
       daily: 10,
       hour: 2
@@ -63,7 +63,7 @@ const tasks = [
     type: ['pc'],
     frequencyOption: ['5h', 'daily', 'never'],
     frequency: '5h',
-    rateLimit:{
+    rateLimit: {
       weekly: 55,
       daily: 10,
       hour: 2
@@ -85,7 +85,7 @@ const tasks = [
       host: ['plus.m.jd.com'],
       pathname: ['/index']
     },
-    rateLimit:{
+    rateLimit: {
       weekly: 32,
       daily: 4,
       hour: 2
@@ -108,7 +108,7 @@ const tasks = [
       pathname: ['/member/rightsCenter/'],
       hash: ["#/coupon"]
     },
-    rateLimit:{
+    rateLimit: {
       weekly: 32,
       daily: 4,
       hour: 2
@@ -118,7 +118,7 @@ const tasks = [
   {
     id: '21',
     src: {
-      pc: 'https://jjb.zaoshu.so/event/coupon?type=phone',
+      pc: '',
     },
     baseUrl: 'https://a.jd.com',
     title: '话费充值券',
@@ -137,13 +137,13 @@ const tasks = [
       result: ".mask .content",
       successKeyWord: "成功",
     },
-    rateLimit:{
+    rateLimit: {
       weekly: 32,
       daily: 4,
       hour: 2
     }
   },
-   // 已失效
+  // 已失效
   {
     id: '29',
     src: {
@@ -162,7 +162,7 @@ const tasks = [
       pathname: ['/resources/pineapple/index.html']
     },
     new: true,
-    rateLimit:{
+    rateLimit: {
       weekly: 14,
       daily: 3,
       hour: 2
@@ -186,7 +186,7 @@ const tasks = [
       pathname: ['/vip/activity/newperback/index.html']
     },
     new: true,
-    rateLimit:{
+    rateLimit: {
       weekly: 14,
       daily: 3,
       hour: 2
@@ -207,7 +207,7 @@ const tasks = [
     checkin: true,
     frequencyOption: ['daily', 'never'],
     frequency: 'daily',
-    rateLimit:{
+    rateLimit: {
       weekly: 32,
       daily: 4,
       hour: 2
@@ -230,7 +230,7 @@ const tasks = [
       host: ['coin.jd.com'],
       pathname: ['/m/gb/index.html']
     },
-    rateLimit:{
+    rateLimit: {
       weekly: 32,
       daily: 4,
       hour: 2
@@ -250,7 +250,7 @@ const tasks = [
     checkin: true,
     frequencyOption: ['daily', 'never'],
     frequency: 'daily',
-    rateLimit:{
+    rateLimit: {
       weekly: 32,
       daily: 4,
       hour: 2
@@ -274,7 +274,7 @@ const tasks = [
       host: ['uf.jr.jd.com'],
       pathname: ['/activities/sign/v5/index.html']
     },
-    rateLimit:{
+    rateLimit: {
       weekly: 32,
       daily: 4,
       hour: 2
@@ -294,7 +294,7 @@ const tasks = [
     type: ['m'],
     frequencyOption: ['daily', 'never'],
     frequency: 'daily',
-    rateLimit:{
+    rateLimit: {
       weekly: 32,
       daily: 4,
       hour: 2
@@ -334,7 +334,7 @@ const tasks = [
     type: ['m'],
     frequencyOption: ['daily', 'never'],
     frequency: 'daily',
-    rateLimit:{
+    rateLimit: {
       weekly: 32,
       daily: 4,
       hour: 2
@@ -359,7 +359,7 @@ const tasks = [
       pathname: ['/newPage/reward']
     },
     new: true,
-    rateLimit:{
+    rateLimit: {
       weekly: 32,
       daily: 4,
       hour: 2
@@ -385,7 +385,7 @@ const tasks = [
       pathname: ['/gcmall/']
     },
     new: true,
-    rateLimit:{
+    rateLimit: {
       weekly: 14,
       daily: 3,
       hour: 2
@@ -411,7 +411,7 @@ const tasks = [
       hash: ["#/white"]
     },
     new: true,
-    rateLimit:{
+    rateLimit: {
       weekly: 32,
       daily: 4,
       hour: 2
@@ -434,7 +434,7 @@ const tasks = [
     type: ['pc'],
     frequencyOption: ['2h', '5h', 'daily', 'never'],
     frequency: '2h',
-    rateLimit:{
+    rateLimit: {
       weekly: 55,
       daily: 10,
       hour: 2
@@ -491,7 +491,7 @@ let getTask = function (taskId, currentPlatform) {
     if (task.messages.length > 0) {
       let lastDone = task.messages[0]
       taskStatus.checked = true
-      taskStatus.checkin_description = "最近一次完成于：" + readableTime(DateTime.fromMillis(lastDone.timestamp)) + (lastDone.value ? "，领到：" + lastDone.value : "") + (lastDone.reward ? mapReward[lastDone.reward] : "" );
+      taskStatus.checkin_description = "最近一次完成于：" + readableTime(DateTime.fromMillis(lastDone.timestamp)) + (lastDone.value ? "，领到：" + lastDone.value : "") + (lastDone.reward ? mapReward[lastDone.reward] : "");
     }
   }
 

@@ -59,7 +59,7 @@ export default {
           description: "热门的促销活动推荐",
           style: "margin-right: 3px;",
           mode: "iframe",
-          url: "https://jjb.zaoshu.so/recommend"
+          url: ""
         }
       ])
     };

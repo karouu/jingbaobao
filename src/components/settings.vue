@@ -152,7 +152,6 @@
                 </div>
               </div>
             </div>
-            <vitamin/>
             <div class="tips bottom-tips">
               <p class="page__desc" v-if="notice">
                 <a id="notice" @dblclick="changeTips">{{notice.text}}</a>
@@ -614,7 +613,6 @@ import { getSetting, saveSetting } from "../utils";
 import taskSetting from "./task-setting.vue";
 import support from "./support.vue";
 import links from "./links.vue";
-import vitamin from "./vitamin.vue";
 import weDialog from "./we-dialog.vue";
 
 const settingKeys = [
@@ -635,7 +633,7 @@ const settingKeys = [
 export default {
   name: "settings",
   props: ["loginState"],
-  components: { taskSetting, support, links, vitamin, weDialog },
+  components: { taskSetting, support, links, weDialog },
   data() {
     return {
       frequencyOptionText: frequencyOptionText,
@@ -824,7 +822,6 @@ export default {
       this.dialog = {
         title: "关注京价保公众号",
         content: `
-          <img src="http://jjbcdn.zaoshu.so/wechat/qrcode_for_gh_21550d50400c_430.jpg" class="jjb-official tippy" data-tippy-content="微信搜索“京价保”也可以关注"  alt="jjb-official" width="280">
           <p class="tips">主要发布更新通知，亦可在公众号留言向开发者反馈。</p>
         `
       };

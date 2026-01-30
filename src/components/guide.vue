@@ -55,8 +55,8 @@
           <div class="weui-dialog__bd">
             <p>京价保从第一个版本开始就开放所有的源代码，有超过 1000 位程序员/工程师在 <a href="https://github.com/sunoj/jjb" target="_blank">Github</a> 关注了京价保的代码，如果你对京价保的代码感兴趣，或者发现什么代码中的问题，亦或是怀疑京价保有什么泄露隐私的小动作，都可以在代码中找到答案。</p>
             <p>京价保还创建了一个公众号，会不定期推送一些功能更新或者相关文章，你还可以通过公众号来提交一些反馈建议。</p>
-            <p style="text-align: center;margin-top: -1em;margin-bottom: 0em;">
-              <img class="jjb-official" :src="`http://jjbcdn.zaoshu.so/wechat/qrcode_for_gh_21550d50400c_430.jpg`" width="160"/>
+            <p style="text-align: center; color: #999; font-size: 14px; margin: 20px 0;">
+              <em>(公众号二维码已移除)</em>
             </p>
 
             <p>如果你使用 Telegram，那么你还可以 Telegram 上关注京价保：<a href="https://t.me/jingjiabao" target="_blank">https://t.me/jingjiabao</a> </p>

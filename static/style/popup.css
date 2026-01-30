@@ -5,28 +5,71 @@ select {
 }
 
 @-moz-document url-prefix() {
-    html, body {
+
+    html,
+    body {
         overflow: hidden !important;
     }
 }
 
 a {
-    color: #0b85c3;
+    color: var(--link-color);
     cursor: pointer;
 }
 
 a:hover {
-    color: #006da5;
+    color: var(--link-hover);
 }
 
-html, body {
+html,
+body {
     margin: 0;
     overflow-x: hidden;
     overflow-y: hidden;
     --zoom-factor: 1;
+
+    /* Light mode colors (default) */
+    --bg-primary: #eee;
+    --bg-secondary: #fbfbfb;
+    --bg-tertiary: #f7f7fa;
+    --bg-content: #fafafa;
+    --bg-white: #fff;
+    --text-primary: #333;
+    --text-secondary: #666;
+    --text-tertiary: #999;
+    --text-light: #bbb;
+    --border-color: #eee;
+    --border-light: #dcdfe6;
+    --border-dark: #d4d4d4;
+    --link-color: #0b85c3;
+    --link-hover: #006da5;
+    --shadow: rgba(0, 0, 0, 0.1);
 }
 
-body::-webkit-scrollbar{
+/* Dark mode colors */
+@media (prefers-color-scheme: dark) {
+
+    html,
+    body {
+        --bg-primary: #1a1a1a;
+        --bg-secondary: #242424;
+        --bg-tertiary: #2a2a2a;
+        --bg-content: #1e1e1e;
+        --bg-white: #2d2d2d;
+        --text-primary: #e0e0e0;
+        --text-secondary: #b0b0b0;
+        --text-tertiary: #888;
+        --text-light: #666;
+        --border-color: #3a3a3a;
+        --border-light: #404040;
+        --border-dark: #4a4a4a;
+        --link-color: #4a9eff;
+        --link-hover: #6db3ff;
+        --shadow: rgba(0, 0, 0, 0.3);
+    }
+}
+
+body::-webkit-scrollbar {
     display: none;
 }
 
@@ -34,7 +77,7 @@ body::-webkit-scrollbar{
     min-height: 600px;
     min-width: 800px;
     overflow: hidden;
-    background: #eee;
+    background: var(--bg-primary);
 }
 
 .main-app {
@@ -45,15 +88,21 @@ body::-webkit-scrollbar{
 }
 
 .weui-cell_select {
-    height: 34px;
+    height: auto;
+    min-height: 34px;
     font-size: 15px;
-    padding: 2px 15px;
+    padding: 8px 15px;
+    display: flex;
+    align-items: center;
 }
 
 .frequency_settings .weui-cell_select {
-    height: 32px;
+    height: auto;
+    min-height: 38px;
     font-size: 13px;
-    padding: 1.5px 11px;
+    padding: 6px 11px;
+    display: flex;
+    align-items: center;
 }
 
 .frequency_settings .weui-cell__bd i.show {
@@ -61,7 +110,8 @@ body::-webkit-scrollbar{
     margin-left: -5px;
     display: inline-block !important;
     height: 20px;
-    margin-top: -2px;
+    vertical-align: middle;
+    margin-top: 0;
 }
 
 .page__hd {
@@ -78,8 +128,8 @@ body::-webkit-scrollbar{
 
 .settings {
     min-width: 365px;
-    background: #fbfbfb;
-    border-right: 1px solid #eee;
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border-color);
     overflow: hidden;
     position: relative;
 }
@@ -110,8 +160,10 @@ body::-webkit-scrollbar{
     min-height: 600px;
     flex-grow: 1;
     overflow: hidden;
-    background: #fafafa;
+    background: var(--bg-content);
     position: relative;
+    display: flex;
+    flex-direction: column;
 }
 
 .contents .weui-navbar__item.weui-bar__item_on {
@@ -119,15 +171,14 @@ body::-webkit-scrollbar{
     color: #fff;
 }
 
-.weui-navbar__item.weui-bar__item_on.zaoshu-tab {
-    color: #921714;
-    background: #eaeaea;
-    border-bottom: 1px #ccc solid;
-}
+
 
 .contents .weui-tab {
-    background: #f5f5f5;
+    background: var(--bg-content);
     height: auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
 }
 
 .weui-cell_switch {
@@ -145,11 +196,7 @@ body::-webkit-scrollbar{
     background-color: #4CAF50;
 }
 
-.contents .weui-tab .weui-badge.new-discounts {
-    background-color: #b9201d;
-    padding: 0.3em;
-    position: absolute;
-}
+
 
 .other_actions {
     padding: 10px;
@@ -162,7 +209,8 @@ body::-webkit-scrollbar{
     padding: 5px 0;
 }
 
-.no_order, .no_message {
+.no_order,
+.no_message {
     background: url(../image/empty.svg) no-repeat center 10px;
     padding: 5em 0em;
     text-align: center;
@@ -171,8 +219,10 @@ body::-webkit-scrollbar{
 }
 
 .bottom-tips {
-    padding: 5px;
-    background: #eee;
+    padding: 10px;
+    padding-bottom: 15px;
+    background: var(--border-color);
+    margin-top: 10px;
 }
 
 .other_actions h3 {
@@ -204,19 +254,46 @@ body::-webkit-scrollbar{
 }
 
 .frequency_settings .weui-cell__bd {
-    line-height: 34px;
+    display: flex;
+    align-items: center;
 }
+
 
 .frequency_settings .weui-icon-waiting-circle {
     font-size: 19px;
 }
+
+.frequency_settings .job-m {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.frequency_settings .job-m span {
+    display: flex;
+    align-items: center;
+}
+
+.frequency_settings .job-m i {
+    vertical-align: middle;
+}
+
+.frequency_settings .task-item {
+    margin-bottom: 1px;
+}
+
+.frequency_settings .task-item .weui-cell {
+    border-bottom: 1px solid var(--border-color);
+}
+
+
 
 .switch-paymethod {
     cursor: pointer;
 }
 
 #notice {
-    color: #333;
+    color: var(--text-primary);
 }
 
 .alipay_action {
@@ -244,7 +321,8 @@ body::-webkit-scrollbar{
     overflow: hidden;
 }
 
-.orders li, .messages li {
+.orders li,
+.messages li {
     display: block;
     overflow: hidden;
 }
@@ -261,7 +339,8 @@ body::-webkit-scrollbar{
     mask-size: 16px;
 }
 
-.orders .show-order, .orders .hide-order {
+.orders .show-order,
+.orders .hide-order {
     width: 20px;
     height: 21px;
     color: #dcdcdc;
@@ -282,7 +361,8 @@ body::-webkit-scrollbar{
     mask-size: 16px;
 }
 
-.monitoring .suspend, .monitoring .resume {
+.monitoring .suspend,
+.monitoring .resume {
     width: 55px;
     height: 55px;
     color: #dcdcdc;
@@ -336,7 +416,9 @@ body::-webkit-scrollbar{
     padding-top: 5px;
 }
 
-#orders .weui-cell:before, .contents-box.weui-cells:before, .contents-box.weui-cells:after {
+#orders .weui-cell:before,
+.contents-box.weui-cells:before,
+.contents-box.weui-cells:after {
     border-top: none;
     content: none;
 }
@@ -502,12 +584,7 @@ a.buy-btn:hover {
     display: none;
 }
 
-.zaoshu-icon {
-    width: auto;
-    height: 15px;
-    margin-top: -4px;
-    vertical-align: middle;
-}
+
 
 .testbox b {
     color: #333;
@@ -629,7 +706,8 @@ a.buy-btn:hover {
     font-size: 0;
 }
 
-.el-radio-button, .el-radio-button__inner {
+.el-radio-button,
+.el-radio-button__inner {
     position: relative;
     display: inline-block;
     outline: none;
@@ -661,7 +739,7 @@ a.buy-btn:hover {
 .el-radio-button:first-child .el-radio-button__inner {
     border-left: 1px solid #dcdfe6;
     border-radius: 4px 0 0 4px;
-    box-shadow: none!important;
+    box-shadow: none !important;
 }
 
 .el-radio-button--mini .el-radio-button__inner {
@@ -735,7 +813,8 @@ a.buy-btn:hover {
 }
 
 .tips .page__desc {
-    padding: 2px 5px;
+    padding: 8px 10px;
+    line-height: 1.6;
 }
 
 .bottom {
@@ -801,17 +880,24 @@ img.weui-tabbar__icon {
     padding-top: 0.8em;
 }
 
-#faqDialags .weui-dialog, #feedbackDialags .weui-dialog {
+#faqDialags .weui-dialog,
+#feedbackDialags .weui-dialog {
     background-color: #f8f8f8;
     height: 460px;
 }
 
-#jEventDialags iframe, #faqDialags iframe, #feedbackDialags iframe {
+#jEventDialags iframe,
+#faqDialags iframe,
+#feedbackDialags iframe {
     width: 90%;
     height: 450px;
 }
 
-#feedbackResult, #wechatDialags, #feedbackDialags, #faqDialags, #jEventDialags {
+#feedbackResult,
+#wechatDialags,
+#feedbackDialags,
+#faqDialags,
+#jEventDialags {
     display: none;
 }
 
@@ -868,7 +954,8 @@ img.weui-tabbar__icon {
     border-bottom: 1px solid #ebeef5;
 }
 
-.Button--link, .Button--plain {
+.Button--link,
+.Button--plain {
     height: auto;
     padding: 0;
     line-height: inherit;
@@ -909,7 +996,9 @@ button.Button.messages-tab.Button--plain:focus {
     margin-bottom: -3px;
 }
 
-.message .checkin_notice, .message .goldCoinReceived, .beanReceived {
+.message .checkin_notice,
+.message .goldCoinReceived,
+.beanReceived {
     background: url(../image/bean.png) no-repeat;
     width: 20px;
     height: 20px;
@@ -918,7 +1007,8 @@ button.Button.messages-tab.Button--plain:focus {
     margin-bottom: -3px;
 }
 
-.message .checkin_notice.coin, .message .goldCoinReceived.goldCoin {
+.message .checkin_notice.coin,
+.message .goldCoinReceived.goldCoin {
     background-image: url(../image/coin.png);
 }
 
@@ -950,7 +1040,8 @@ button.Button.messages-tab.Button--plain:focus {
     margin-bottom: -3px;
 }
 
-.message .notice, .message .priceProtectionNotice {
+.message .notice,
+.message .priceProtectionNotice {
     background: url(../image/money.png) no-repeat;
     width: 20px;
     height: 20px;
@@ -1050,18 +1141,21 @@ button.Button.messages-tab.Button--plain:focus {
 .text-tips {
     font-size: 12px;
     text-align: center;
-    color: #666;
+    color: var(--text-secondary);
     padding-top: 5px;
     padding-bottom: 10px;
 }
 
 .recommendServices {
     text-align: center;
+    padding: 10px 0;
 }
 
 .recommendServices .el-tag {
-    margin-right: 2px;
+    margin-right: 4px;
+    margin-bottom: 4px;
 }
+
 
 .el-tag {
     background-color: rgba(64, 158, 255, .1);
@@ -1112,15 +1206,19 @@ button.Button.messages-tab.Button--plain:focus {
 }
 
 .bottom-box {
-    height: 55px;
-    border-top: #d4d4d4;
-    background: #f7f7fa;
-    position: absolute;
+    height: 60px;
+    min-height: 60px;
+    border-top: 1px solid var(--border-dark);
+    background: var(--bg-tertiary);
+    position: sticky;
     bottom: 0;
     width: 100%;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    padding: 0 8px;
+    margin-top: auto;
+    z-index: 10;
 }
 
 .bottom-box .avatar {
@@ -1167,6 +1265,7 @@ button.Button.messages-tab.Button--plain:focus {
 
 .action-list .el-tag {
     padding: 0 8px;
+    margin-left: 4px;
 }
 
 .tips a.weui-btn_primary.weui-btn:hover {
@@ -1352,5 +1451,141 @@ button.Button.messages-tab.Button--plain:focus {
 @media screen and (max-width: 580px) {
     .popup-window .settings {
         display: none;
+    }
+}
+
+/* ============================================
+   Dark Mode Comprehensive Styling
+   ============================================ */
+@media (prefers-color-scheme: dark) {
+
+    /* Dialogs and Modals */
+    .weui-dialog {
+        background-color: var(--bg-secondary);
+        color: var(--text-primary);
+    }
+
+    .weui-mask {
+        background-color: rgba(0, 0, 0, 0.7);
+    }
+
+    .weui-dialog__bd {
+        color: var(--text-primary);
+    }
+
+    .weui-dialog__title {
+        color: var(--text-primary);
+    }
+
+    /* Cells and Lists */
+    .weui-cells {
+        background-color: var(--bg-white);
+        border-top-color: var(--border-color);
+        border-bottom-color: var(--border-color);
+    }
+
+    .weui-cell {
+        background-color: var(--bg-white);
+        color: var(--text-primary);
+        border-bottom-color: var(--border-color);
+    }
+
+    .weui-cell__bd,
+    .weui-cell__ft {
+        color: var(--text-primary);
+    }
+
+    .weui-cell_access {
+        color: var(--text-primary);
+    }
+
+    /* Inputs and Selects */
+    .weui-input,
+    .weui-select {
+        background-color: var(--bg-secondary);
+        color: var(--text-primary);
+        border-color: var(--border-light);
+    }
+
+    /* Buttons */
+    .weui-btn_default {
+        background-color: var(--bg-tertiary);
+        color: var(--text-primary);
+        border-color: var(--border-light);
+    }
+
+    .weui-btn_default:hover {
+        background-color: var(--bg-secondary);
+    }
+
+    /* Orders and Messages */
+    .order_time,
+    .order_time span {
+        color: var(--text-secondary);
+    }
+
+    .good_name,
+    .product_name {
+        color: var(--text-primary);
+    }
+
+    .message_time {
+        color: var(--text-tertiary);
+    }
+
+    /* Page descriptions */
+    .page__desc {
+        color: var(--text-secondary);
+    }
+
+    /* Navigation */
+    .weui-navbar {
+        background-color: var(--bg-white);
+    }
+
+    .weui-navbar__item {
+        color: var(--text-secondary);
+    }
+
+    .weui-tab__panel {
+        background-color: var(--bg-content);
+        color: var(--text-primary);
+    }
+
+    /* Action List */
+    .action-list .text-tips {
+        color: var(--text-light);
+    }
+
+    /* Avatar and Login State */
+    .bottom-box .avatar .login-state {
+        background-color: var(--text-tertiary);
+    }
+
+    /* Other elements */
+    .recommendation {
+        background-color: var(--bg-white);
+    }
+
+    .other_actions h3 {
+        color: var(--text-secondary);
+    }
+
+    /* Ensure readability for all text */
+    p,
+    span,
+    div,
+    label {
+        color: inherit;
+    }
+
+    /* Headers */
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+        color: var(--text-primary);
     }
 }

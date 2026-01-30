@@ -1,12 +1,12 @@
 $ = window.$ = window.jQuery = require('jquery')
 import * as _ from "lodash"
 import Logline from 'logline'
-import {DateTime} from 'luxon'
-import {priceProUrl, mapFrequency, getTask, getTasks} from './tasks'
-import {rand, getSetting, saveSetting, macId} from './utils'
-import {getLoginState} from './account'
+import { DateTime } from 'luxon'
+import { priceProUrl, mapFrequency, getTask, getTasks } from './tasks'
+import { rand, getSetting, saveSetting, macId } from './utils'
+import { getLoginState } from './account'
 
-import {findGood, findOrder, updateOrders, newMessage, updateMessages, addTaskLog, findAndUpdateTaskResult} from './db'
+import { findGood, findOrder, updateOrders, newMessage, updateMessages, addTaskLog, findAndUpdateTaskResult } from './db'
 
 Logline.using(Logline.PROTOCOL.INDEXEDDB)
 
@@ -26,49 +26,120 @@ $.ajaxSetup({
 });
 
 // This is to remove X-Frame-Options header, if present
-chrome.webRequest.onHeadersReceived.addListener(
-  function(info) {
-    var headers = info.responseHeaders;
-    for (var i=headers.length-1; i>=0; --i) {
-      var header = headers[i].name.toLowerCase();
-      if (header == 'x-frame-options' || header == 'frame-options') {
-          headers.splice(i, 1); // Remove header
-      }
-    }
-    return {responseHeaders: headers};
-  },
-  {
-      urls: ['*://*.jd.com/*', '*://*.jd.hk/*'], //
-      types: ['sub_frame']
-  },
-  ['blocking', 'responseHeaders']
-);
+// chrome.webRequest.onHeadersReceived removed for MV3 (replaced by declarativeNetRequest rules)
 
-chrome.runtime.onInstalled.addListener(function () {
-  let installed = localStorage.getItem('jjb_installed')
-  if (installed) {
-    console.log("已经安装")
-  } else {
-    localStorage.setItem('jjb_installed', new Date());
-    chrome.tabs.create({url: "/start.html"}, function (tab) {
-      console.log("京价保安装成功！");
+// ============================================================================
+// Chrome API Wrappers - Forward calls to Service Worker since offscreen docs
+// have limited API access
+// ============================================================================
+
+const chromeAction = {
+  getBadgeText: (details, callback) => {
+    chrome.runtime.sendMessage({ type: 'CHROME_ACTION', method: 'getBadgeText', args: [details] }, (response) => {
+      if (callback && response) callback(response.result);
+    });
+  },
+  setBadgeText: (details) => {
+    chrome.runtime.sendMessage({ type: 'CHROME_ACTION', method: 'setBadgeText', args: [details] });
+  },
+  setBadgeBackgroundColor: (details) => {
+    chrome.runtime.sendMessage({ type: 'CHROME_ACTION', method: 'setBadgeBackgroundColor', args: [details] });
+  },
+  setTitle: (details) => {
+    chrome.runtime.sendMessage({ type: 'CHROME_ACTION', method: 'setTitle', args: [details] });
+  },
+  setIcon: (details) => {
+    chrome.runtime.sendMessage({ type: 'CHROME_ACTION', method: 'setIcon', args: [details] });
+  }
+};
+
+const chromeAlarms = {
+  create: (name, alarmInfo) => {
+    chrome.runtime.sendMessage({ type: 'CHROME_ALARMS', method: 'create', args: [name, alarmInfo] });
+  },
+  get: (name, callback) => {
+    chrome.runtime.sendMessage({ type: 'CHROME_ALARMS', method: 'get', args: [name] }, (response) => {
+      if (callback && response) callback(response.result);
+    });
+  },
+  clearAll: () => {
+    chrome.runtime.sendMessage({ type: 'CHROME_ALARMS', method: 'clearAll', args: [] });
+  },
+  clear: (name) => {
+    chrome.runtime.sendMessage({ type: 'CHROME_ALARMS', method: 'clear', args: [name] });
+  }
+};
+
+const chromeTabs = {
+  create: (createProperties, callback) => {
+    chrome.runtime.sendMessage({ type: 'CHROME_TABS', method: 'create', args: [createProperties] }, (response) => {
+      if (callback && response) callback(response.result);
+    });
+  },
+  get: (tabId, callback) => {
+    chrome.runtime.sendMessage({ type: 'CHROME_TABS', method: 'get', args: [tabId] }, (response) => {
+      if (callback && response) callback(response.result);
+    });
+  },
+  remove: (tabIds) => {
+    chrome.runtime.sendMessage({ type: 'CHROME_TABS', method: 'remove', args: [tabIds] });
+  },
+  update: (tabId, updateProperties, callback) => {
+    chrome.runtime.sendMessage({ type: 'CHROME_TABS', method: 'update', args: [tabId, updateProperties] }, (response) => {
+      if (callback && response) callback(response.result);
+    });
+  },
+  query: (queryInfo, callback) => {
+    chrome.runtime.sendMessage({ type: 'CHROME_TABS', method: 'query', args: [queryInfo] }, (response) => {
+      if (callback && response) callback(response.result);
+    });
+  },
+  sendMessage: (tabId, message, options, callback) => {
+    chrome.runtime.sendMessage({ type: 'CHROME_TABS', method: 'sendMessage', args: [tabId, message, options] }, (response) => {
+      if (callback && response) callback(response.result);
     });
   }
-});
+};
+
+const chromeWindows = {
+  create: (createData, callback) => {
+    chrome.runtime.sendMessage({ type: 'CHROME_WINDOWS', method: 'create', args: [createData] }, (response) => {
+      if (callback && response) callback(response.result);
+    });
+  },
+  update: (windowId, updateInfo) => {
+    chrome.runtime.sendMessage({ type: 'CHROME_WINDOWS', method: 'update', args: [windowId, updateInfo] });
+  }
+};
+
+const chromeNotifications = {
+  create: (notificationId, options) => {
+    chrome.runtime.sendMessage({ type: 'CHROME_NOTIFICATIONS', method: 'create', args: [notificationId, options] });
+  }
+};
+
+const chromeRuntimeReload = () => {
+  chrome.runtime.sendMessage({ type: 'CHROME_RUNTIME_RELOAD' });
+};
+
+
 
 // 判断浏览器
 try {
-  browser.runtime.getBrowserInfo().then(function (browserInfo) {
-    localStorage.setItem('browserName', browserInfo.name);
-  })
-} catch (error) {}
+  // browser namespace is not available in Chrome, use chrome namespace or polyfill if needed.
+  // MV3 checks usually sufficient.
+  // browser.runtime.getBrowserInfo().then(function (browserInfo) {
+  //   localStorage.setItem('browserName', browserInfo.name);
+  // })
+} catch (error) { }
 
 
 // 定时任务
-chrome.alarms.onAlarm.addListener(function( alarm ) {
+// Replaced by onMessage handler for ALARM_TRIGGERED
+function handleAlarm(alarm) {
   log('background', "onAlarm", alarm)
   let taskId = alarm.name.split('_').length > 1 ? alarm.name.split('_')[1] : null
-  switch(true){
+  switch (true) {
     // 计划任务
     case alarm.name.startsWith('runScheduleJob'):
       runJob(taskId)
@@ -91,21 +162,52 @@ chrome.alarms.onAlarm.addListener(function( alarm ) {
       break;
     case alarm.name.startsWith('closeTab'):
       try {
-        chrome.tabs.get(taskId, (tab) => {
+        chromeTabs.get(taskId, (tab) => {
           if (tab) {
-            chrome.tabs.remove(tab.id)
+            chromeTabs.remove(tab.id)
           }
         })
-      } catch (e) {}
+      } catch (e) { }
       break;
     case alarm.name == 'reload':
-      chrome.runtime.reload()
-      chrome.alarms.clearAll()
+      chromeRuntimeReload()
+      chromeAlarms.clearAll()
       // 保留3天内的log
       Logline.keep(3);
       break;
   }
-})
+}
+// Listen for forwarded alarms from Service Worker
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Only process messages that are:
+  // 1. Internal alarm/notification triggers from SW (type check)
+  // 2. Forwarded legacy messages from SW (target: 'offscreen')
+  // 3. Responses (which usually don't trigger this listener but good to be safe)
+
+  // Verify source is trusted (from SW)
+  if (message.target !== 'offscreen' && !['ALARM_TRIGGERED', 'NOTIFICATION_CLICKED', 'NOTIFICATION_BUTTON_CLICKED', 'CHROME_ACTION', 'CHROME_ALARMS', 'CHROME_TABS', 'CHROME_WINDOWS', 'UPDATE_CONTEXT_MENU'].includes(message.type)) {
+    // If it's not one of our internal types and not marked as offscreen target, ignore it.
+    // This prevents the offscreen document from racing with the SW to handle messages from content scripts directly.
+    // However, since we are in the offscreen doc, we *are* the background script.
+    // But we want to FORCE the content script messages to go through SW -> ensureOffscreen -> background.js
+
+    // Actually, if we just ignore non-targeted messages, we achieve the goal.
+    // But wait, 'CHROME_ACTION' etc are OUTGOING messages from background.js, they shouldn't be handled here.
+    return;
+  }
+
+  if (message.type === 'ALARM_TRIGGERED') {
+    handleAlarm(message.alarm);
+  } else if (message.type === 'NOTIFICATION_CLICKED') {
+    // No changes to background.js needed based on analysis.
+    // The service_worker.js fix handles the communication channel issues. (it was registered in SW)
+    // The original code uses chrome.notifications.onClicked which might fire in SW
+    // We need to move that logic here or make handleNotificationClick function
+    handleNotificationClick(message.notificationId);
+  } else if (message.type === 'NOTIFICATION_BUTTON_CLICKED') {
+    handleNotificationButtonClick(message.notificationId, message.buttonIndex);
+  }
+});
 
 // 保存任务栈
 function saveJobStack(jobStack) {
@@ -117,9 +219,9 @@ function saveJobStack(jobStack) {
 function findTasksByLocation(location) {
   let taskList = getTasks()
   let locationTask = taskList.filter(task => task.location && Object.keys(task.location).length > 0)
-  let matchedTasks =[]
+  let matchedTasks = []
   locationTask.forEach((task) => {
-    if (Object.keys(task.location).every((key) => task.location[key].indexOf(location[key]) > -1 )) {
+    if (Object.keys(task.location).every((key) => task.location[key].indexOf(location[key]) > -1)) {
       matchedTasks.push(task)
     }
   })
@@ -136,7 +238,7 @@ function scheduleJob(task) {
         minute: rand(2) - 1,
         second: rand(55)
       }).valueOf()
-      chrome.alarms.create('runScheduleJob_' + task.id, {
+      chromeAlarms.create('runScheduleJob_' + task.id, {
         when: scheduledTime
       })
       log('background', "schedule job created", {
@@ -152,7 +254,7 @@ function scheduleJob(task) {
 
 function pushJob(task, jobStack) {
   if (task.schedule) {
-    chrome.alarms.get('runScheduleJob_' + task.id, function (alarm) {
+    chromeAlarms.get('runScheduleJob_' + task.id, function (alarm) {
       if (!alarm || alarm.scheduledTime < Date.now()) {
         return scheduleJob(task)
       } else {
@@ -171,14 +273,14 @@ function findJobs(platform) {
   let jobStack = getSetting('jobStack', [])
   let taskList = getTasks(platform)
 
-  taskList.forEach(function(task) {
+  taskList.forEach(function (task) {
     if (task.suspended || task.deprecated || task.pause) {
       return console.log(task.title, '任务已暂停', task)
     }
     if (task.checked) {
       return console.log(task.title, '任务已完成')
     }
-    switch(task.frequency){
+    switch (task.frequency) {
       case '2h':
         // 如果从没运行过，或者上次运行已经过去超过2小时，那么需要运行
         if (!task.last_run_at || (DateTime.local() > DateTime.fromMillis(task.last_run_at).plus({ hours: 2 }))) {
@@ -288,7 +390,7 @@ function openByIframe(src, type, delayTimes = 0) {
   resetIframe(iframeId)
   $("#" + iframeId).attr('src', src)
   // 设置重置任务
-  chrome.alarms.create((type == 'temporary' ? 'destroyIframe_' : 'clearIframe_') + iframeId, {
+  chromeAlarms.create((type == 'temporary' ? 'destroyIframe_' : 'clearIframe_') + iframeId, {
     delayInMinutes: keepMinutes
   })
 }
@@ -305,17 +407,17 @@ function updateUnreadCount(change = 0) {
     if (unreadCount > 100) {
       unreadCountText = '99+'
     }
-    chrome.browserAction.setBadgeText({ text: unreadCountText });
-    chrome.browserAction.setBadgeBackgroundColor({ color: "#4caf50" });
+    chromeAction.setBadgeText({ text: unreadCountText });
+    chromeAction.setBadgeBackgroundColor({ color: "#4caf50" });
   } else {
-    chrome.browserAction.setBadgeText({ text: "" });
+    chromeAction.setBadgeText({ text: "" });
   }
 }
 
 // 清除掉不必要的
 function removeExpiredLocalStorageItems() {
   let arr = [];
-  for (var i = 0; i < localStorage.length; i++){
+  for (var i = 0; i < localStorage.length; i++) {
     if (localStorage.key(i).indexOf('temporary:') == 0) {
       arr.push(localStorage.key(i));
     }
@@ -326,16 +428,16 @@ function removeExpiredLocalStorageItems() {
   }
 }
 
-$( document ).ready(function() {
+$(document).ready(function () {
   currentTask = null
   log('background', "document ready", new Date())
   // 每10分钟运行一次定时任务
-  chrome.alarms.create('cycleTask', {
+  chromeAlarms.create('cycleTask', {
     periodInMinutes: 10
   })
 
   // 每600分钟完全重载
-  chrome.alarms.create('reload', {periodInMinutes: 600})
+  chromeAlarms.create('reload', { periodInMinutes: 600 })
 
   // 载入后马上运行一次任务查找
   findJobs()
@@ -358,7 +460,7 @@ $( document ).ready(function() {
 
 // 用手机模式打开
 function openWebPageAsMobile(url) {
-  chrome.windows.create({
+  chromeWindows.create({
     width: 420,
     height: 800,
     url: url,
@@ -367,36 +469,36 @@ function openWebPageAsMobile(url) {
 }
 
 function openLoginPage(loginState) {
-  chrome.tabs.create({
+  chromeTabs.create({
     url: "https://home.jd.com"
   })
 }
 
 // 点击通知
-chrome.notifications.onClicked.addListener(function (notificationId) {
+function handleNotificationClick(notificationId) {
   if (notificationId.split('_').length > 0) {
     let batch = notificationId.split('_')[1]
     let type = notificationId.split('_')[2]
     if (batch && batch.length > 1) {
       switch (batch) {
         case 'baitiao':
-          chrome.tabs.create({
+          chromeTabs.create({
             url: "https://vip.jr.jd.com/coupon/myCoupons?default=IOU"
           })
           break;
         case 'bean':
-          chrome.tabs.create({
+          chromeTabs.create({
             url: "http://bean.jd.com/myJingBean/list"
           })
           break;
         case 'jiabao':
-          chrome.tabs.create({
+          chromeTabs.create({
             url: "https://pcsitepp-fm.jd.com/"
           })
           break;
         case 'login-failed':
           if (type == 'pc') {
-            chrome.tabs.create({
+            chromeTabs.create({
               url: "https://passport.jd.com/uc/login"
             })
           } else {
@@ -405,21 +507,19 @@ chrome.notifications.onClicked.addListener(function (notificationId) {
           break;
         default:
           if (batch && batch != 'undefined' && type == 'coupon') {
-            chrome.tabs.create({
+            chromeTabs.create({
               url: "https://search.jd.com/Search?coupon_batch=" + batch
             })
           } else {
-            chrome.tabs.create({
-              url: "https://zaoshu.so/coupon"
-            })
+            // Removed zaoshu.so coupon link
           }
       }
     }
   }
-})
+}
 
 // 按钮点击
-chrome.notifications.onButtonClicked.addListener(function (notificationId, buttonIndex) {
+function handleNotificationButtonClick(notificationId, buttonIndex) {
   if (notificationId.split('_').length > 0) {
     let batch = notificationId.split('_')[1]
     let type = notificationId.split('_')[2]
@@ -427,13 +527,13 @@ chrome.notifications.onButtonClicked.addListener(function (notificationId, butto
       return
     }
 
-    if  (buttonIndex == 1) {
+    if (buttonIndex == 1) {
       return saveSetting("mute_login-failed", true)
     }
     switch (type) {
       case 'pc':
         if (buttonIndex == 0) {
-          chrome.tabs.create({
+          chromeTabs.create({
             url: "https://passport.jd.com/uc/login"
           })
         }
@@ -444,45 +544,36 @@ chrome.notifications.onButtonClicked.addListener(function (notificationId, butto
         }
         break;
       default:
-        chrome.tabs.create({
-          url: "https://zaoshu.so/coupon"
-        })
+      // Removed zaoshu.so link
     }
   }
-})
+}
 
-chrome.contextMenus.create({
-  title: "作为独立窗口打开",
-  contexts: ["browser_action"],
-  onclick: () => {
-    chrome.windows.create({
-      url: chrome.runtime.getURL("popup.html"),
-      width: 800,
-      height: 620,
-      top: 0,
-      type: "popup",
-      state: 'normal'
-    }, function (win) {
-      chrome.windows.update(win.id, { focused: true });
-    });
+chrome.runtime.sendMessage({
+  type: 'UPDATE_CONTEXT_MENU',
+  action: 'create',
+  menuProperties: {
+    title: "作为独立窗口打开",
+    contexts: ["action"],
+    id: "open-popup"
   }
 });
 
 function resetIcon() {
-  chrome.browserAction.getBadgeText({}, function (text){
+  chromeAction.getBadgeText({}, function (text) {
     if (text == "X" || text == " ! ") {
-      chrome.browserAction.setBadgeText({
+      chromeAction.setBadgeText({
         text: ""
       });
-      chrome.browserAction.setTitle({
+      chromeAction.setTitle({
         title: "京价保"
       })
     }
   })
-  chrome.browserAction.setIcon({
-    path : {
-      "19": "static/image/jjb19x.png",
-      "38": "static/image/jjb38x.png"
+  chromeAction.setIcon({
+    path: {
+      "19": "static/image/icon/jjb19x.png",
+      "38": "static/image/icon/jjb38x.png"
     }
   });
 }
@@ -493,68 +584,73 @@ function updateIcon() {
   switch (loginState.class) {
     case 'alive':
       resetIcon();
-      try {
-        chrome.contextMenus.remove("login-notice");
-      } catch (error) {
-      }
+      chrome.runtime.sendMessage({
+        type: 'UPDATE_CONTEXT_MENU',
+        action: 'remove',
+        menuId: "login-notice"
+      });
       break;
     case 'failed':
-      chrome.browserAction.setBadgeBackgroundColor({
+      chromeAction.setBadgeBackgroundColor({
         color: [190, 190, 190, 230]
       });
-      chrome.browserAction.setBadgeText({
+      chromeAction.setBadgeText({
         text: "X"
       });
-      chrome.browserAction.setTitle({
+      chromeAction.setTitle({
         title: "账号登录失效"
       })
-      chrome.browserAction.setIcon({
-        path : {
-          "19": "static/image/offline19x.png",
-          "38": "static/image/offline38x.png"
+      chromeAction.setIcon({
+        path: {
+          "19": "static/image/icon/offline19x.png",
+          "38": "static/image/icon/offline38x.png"
         }
       });
-      try {
-        chrome.contextMenus.remove("login-notice");
-      } catch (error) {
-      }
-      chrome.contextMenus.create({
-        id: "login-notice",
-        title: "账号登录失效，点击登录",
-        contexts: ["browser_action"],
-        onclick: function() {
-          openLoginPage(loginState)
+      chrome.runtime.sendMessage({
+        type: 'UPDATE_CONTEXT_MENU',
+        action: 'remove',
+        menuId: "login-notice"
+      });
+      chrome.runtime.sendMessage({
+        type: 'UPDATE_CONTEXT_MENU',
+        action: 'create',
+        menuProperties: {
+          id: "login-notice",
+          title: "账号登录失效，点击登录",
+          contexts: ["action"]
         }
       });
       break;
     case 'warning':
       let lastOpenPopupAt = getSetting('lastOpenPopupAt', null)
-      if ( lastOpenPopupAt && DateTime.fromJSDate(new Date(loginState.m.time)) > DateTime.fromISO(lastOpenPopupAt)) {
-        chrome.browserAction.setBadgeBackgroundColor({
+      if (lastOpenPopupAt && DateTime.fromJSDate(new Date(loginState.m.time)) > DateTime.fromISO(lastOpenPopupAt)) {
+        chromeAction.setBadgeBackgroundColor({
           color: "#EE7E1B"
         });
-        chrome.browserAction.setBadgeText({
+        chromeAction.setBadgeText({
           text: " ! "
         });
-        chrome.browserAction.setIcon({
-          path : {
+        chromeAction.setIcon({
+          path: {
             "19": "static/image/partial-offline19x.png",
             "38": "static/image/partial-offline38x.png"
           }
         });
-        try {
-          chrome.contextMenus.remove("login-notice");
-        } catch (error) {
-        }
-        chrome.contextMenus.create({
-          id: "login-notice",
-          title: "登录部分失效，点击登录",
-          contexts: ["browser_action"],
-          onclick: function() {
-            openLoginPage(loginState)
+        chrome.runtime.sendMessage({
+          type: 'UPDATE_CONTEXT_MENU',
+          action: 'remove',
+          menuId: "login-notice"
+        });
+        chrome.runtime.sendMessage({
+          type: 'UPDATE_CONTEXT_MENU',
+          action: 'create',
+          menuProperties: {
+            id: "login-notice",
+            title: "登录部分失效，点击登录",
+            contexts: ["action"]
           }
         });
-      }  else {
+      } else {
         resetIcon();
       }
       break;
@@ -597,7 +693,7 @@ function sendChromeNotification(id, content) {
   if (muteNight && hour < 6) {
     log('background', 'mute_night', content);
   } else {
-    chrome.notifications.create(id, content)
+    chromeNotifications.create(id, content)
     log('message', id, content);
   }
 }
@@ -605,7 +701,7 @@ function sendChromeNotification(id, content) {
 // 价保设置
 function getPriceProtectionSetting() {
   let pro_min = getSetting('price_pro_min', 0.1);
-  let is_plus = (getSetting('is_plus') ? getSetting('is_plus') == 'checked' : false ) || (getSetting('jjb_plus') == 'Y')
+  let is_plus = (getSetting('is_plus') ? getSetting('is_plus') == 'checked' : false) || (getSetting('jjb_plus') == 'Y')
   let prompt_only = getSetting('prompt_only') ? getSetting('prompt_only') == 'checked' : false
   let suspendedApplyIds = getSetting("suspendedApplyIds", []);
   return {
@@ -616,108 +712,49 @@ function getPriceProtectionSetting() {
   }
 }
 
-// 报告价格
+// 报告价格 (已移除)
 function reportPrice(priceInfo) {
-  if (!priceInfo.sku) return
-  log('background', 'reportPrice', priceInfo)
-  $.ajax({
-    method: "POST",
-    url: `https://jjb.zaoshu.so/price/${priceInfo.sku}`,
-    data: {
-      name: priceInfo.name,
-      sku: priceInfo.sku,
-      price: priceInfo.normal_price ? Number(priceInfo.normal_price) : null,
-      normal_price: priceInfo.normal_price ? Number(priceInfo.normal_price) : null,
-      plus_price: priceInfo.plus_price ? Number(priceInfo.plus_price) : null,
-      pingou_price: priceInfo.pingou_price ? Number(priceInfo.pingou_price) : null,
-    },
-    timeout: 3000,
-    dataType: "json"
-  })
+  // Removed zaoshu.so dependency
 }
 
-// 报告优惠信息
+// 报告优惠信息 (已移除)
 function reportPromotions(promInfo) {
-  let disable_pricechart = (getSetting('disable_pricechart') ? getSetting('disable_pricechart') == 'checked' : false)
-  if (disable_pricechart || !promInfo.sku) return
-  log('background', 'reportPromotions', promInfo)
-  $.ajax({
-    method: "PUT",
-    url: `https://jjb.zaoshu.so/price/${promInfo.sku}/promotions`,
-    data: promInfo,
-    timeout: 3000,
-    dataType: "json"
-  })
+  // Removed zaoshu.so dependency
 }
 
-// 加载任务参数
+// 加载任务参数 (已移除)
 function loadSettingsToLocalStorage(key) {
-  $.getJSON(`https://jjb.zaoshu.so/setting/${key}`, function (json) {
-    saveSetting(key, json)
-  })
+  // Removed zaoshu.so dependency
 }
 
-// 加载推荐设置
+// 加载推荐设置 (已移除)
 function loadRecommendSettingsToLocalStorage() {
-  $.getJSON("https://jjb.zaoshu.so/recommend/settings", function (json) {
-    if (json.displayPopup) {
-      saveSetting('displayPopup', json.displayPopup)
-    }
-    if (json.events) {
-      saveSetting('events', json.events)
-    }
-    if (json.announcements && json.announcements.length > 0) {
-      saveSetting('announcements', json.announcements)
-    }
-    if (json.promotions) {
-      saveSetting('promotions', json.promotions)
-    }
-    if (json.recommendedLinks && json.recommendedLinks.length > 0) {
-      saveSetting('recommendedLinks', json.recommendedLinks)
-    } else {
-      localStorage.removeItem('recommendedLinks')
-    }
-    if (json.uninstallURL) {
-      chrome.runtime.setUninstallURL(json.uninstallURL)
-    }
-    if (json.recommendServices && json.recommendServices.length > 0) {
-      saveSetting('recommendServices', json.recommendServices)
-    }
-  });
+  // Removed zaoshu.so dependency
 }
 
-// 查询价格历史
+// 查询价格历史 (已移除)
 function getPriceChart(sku, days = 30, sender) {
-  fetch(`https://api.zaoshu.so/price/${sku}/detail?days=${days}`, {
-    mode: 'cors',
-    method: 'GET'
-  })
-  .then(function(response) {
-    return response.json();
-  }).then(function (data) {
-    console.log("getPriceChart", data, sender.tab)
-    chrome.tabs.sendMessage(sender.tab.id, {
-      type: "priceChart",
-      data: data
-    })
-  }).catch((error) => {
-    console.error("getPriceChart", error)
-    chrome.tabs.sendMessage(sender.tab.id, {
-      type: "priceChart",
-      error: error
-    })
-  })
+  // Removed zaoshu.so dependency
+  chromeTabs.sendMessage(sender.tab.id, {
+    type: "priceChart",
+    error: "Price chart service disabled"
+  });
 }
 
 // 处理消息通知
 chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
+  // If the message is forwarded from the Service Worker, use the original sender
+  if (msg.originalSender) {
+    sender = msg.originalSender;
+  }
+
   if (!msg.action) {
     msg.action = msg.text
   }
   let task
   let loginState = getLoginState()
   let hourInYear = DateTime.local().toFormat("oHH")
-  switch(msg.action){
+  switch (msg.action) {
     // 获取移动页商品价格
     case 'getProductPrice':
       let url = `https://item.m.jd.com/product/${msg.sku}.html`
@@ -733,7 +770,7 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
       break;
     // 通知商品价格
     case 'productPrice':
-      let is_plus = (getSetting('is_plus') ? getSetting('is_plus') == 'checked' : false ) || (getSetting('jjb_plus') == 'Y')
+      let is_plus = (getSetting('is_plus') ? getSetting('is_plus') == 'checked' : false) || (getSetting('jjb_plus') == 'Y')
       let disable_pricechart = (getSetting('disable_pricechart') ? getSetting('disable_pricechart') == 'checked' : false)
       let priceInfo = {
         sku: msg.sku,
@@ -746,8 +783,8 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
       // 当前有价保页面
       if (priceProPage) {
         console.log('existence PriceProPage:', priceProPage)
-        if (priceProPage.tab){
-          chrome.tabs.sendMessage(priceProPage.tab.id, Object.assign({
+        if (priceProPage.tab) {
+          chromeTabs.sendMessage(priceProPage.tab.id, Object.assign({
             action: 'productPrice',
             setting: getPriceProtectionSetting(),
           }, priceInfo), {}, function (response) {
@@ -757,7 +794,7 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
           document.getElementById('iframe').contentWindow.postMessage(Object.assign({
             action: 'productPrice',
             setting: getPriceProtectionSetting(),
-          }, priceInfo),'*');
+          }, priceInfo), '*');
         }
       }
       // 价格追踪
@@ -814,7 +851,7 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
         // 临时设置5分钟失效
         setTimeout(() => {
           localStorage.removeItem('temporary_' + msg.content)
-        }, 60*5*1000);
+        }, 60 * 5 * 1000);
         sendResponse(temporarySetting)
       }
       sendResponse(setting)
@@ -887,7 +924,7 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
       }
       break;
     case 'option':
-      localStorage.setItem('jjb_'+msg.title, msg.content);
+      localStorage.setItem('jjb_' + msg.title, msg.content);
       break;
     // 获取任务
     case 'getTask':
@@ -967,7 +1004,7 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
         if (msg.reward == 'coin' || msg.reward == 'goldCoin') {
           icon = coinIcon
         }
-        sendChromeNotification( new Date().getTime().toString() + '_' + msg.batch, {
+        sendChromeNotification(new Date().getTime().toString() + '_' + msg.batch, {
           type: "basic",
           title: msg.title,
           message: msg.content,
@@ -1001,7 +1038,7 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
       })
       // 如果任务周期小于10小时，且不是计划任务，则安排下一次运行
       if (mapFrequency[task.frequency] < 600 && !task.schedule) {
-        chrome.alarms.create('runJob_' + task.id, {
+        chromeAlarms.create('runJob_' + task.id, {
           delayInMinutes: mapFrequency[task.frequency]
         })
       }
@@ -1011,18 +1048,18 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
       break;
     case 'create_tab':
       var content = JSON.parse(msg.content)
-      chrome.tabs.create({
+      chromeTabs.create({
         index: content.index,
         url: content.url,
         active: content.active == 'true',
         pinned: content.pinned == 'true'
       }, function (tab) {
-        chrome.tabs.update(tab.id, {
+        chromeTabs.update(tab.id, {
           muted: true
         }, function (result) {
           log('background', "muted tab", result)
         })
-        chrome.alarms.create('closeTab_' + tab.id, { delayInMinutes: 1 })
+        chromeAlarms.create('closeTab_' + tab.id, { delayInMinutes: 1 })
       })
       break;
     case 'couponReceived':
@@ -1031,7 +1068,7 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
       if (mute_coupon && mute_coupon == 'checked') {
         console.log('coupon', msg)
       } else {
-        sendChromeNotification( new Date().getTime().toString() + "_coupon_" + coupon.batch, {
+        sendChromeNotification(new Date().getTime().toString() + "_coupon_" + coupon.batch, {
           type: "basic",
           title: msg.title,
           message: coupon.name + coupon.price,

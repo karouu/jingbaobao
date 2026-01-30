@@ -1,20 +1,22 @@
 {
-  "manifest_version": 2,
+  "manifest_version": 3,
   "name": "京价保 - 京东价保助手",
   "short_name": "京价保",
   "description": "京价保是一个监控京东商品价格变化，即时提供价保申请信息的浏览器插件",
-  "version": "0.1.1",
+  "version": "1.15.9",
   "background": {
-    "page": "background.html",
-    "persistent": true
+    "service_worker": "static/service_worker.js"
   },
-  "browser_action": {
-    "default_icon": "static/image/jjb.png",
+  "action": {
+    "default_icon": "static/image/icon/jjb.png",
     "default_popup": "popup.html"
   },
   "content_scripts": [
     {
-      "matches": ["*://*.jd.com/*", "*://*.jd.hk/*"],
+      "matches": [
+        "*://*.jd.com/*",
+        "*://*.jd.hk/*"
+      ],
       "js": [
         "static/jquery.min.js",
         "static/content_script.js"
@@ -34,7 +36,8 @@
         "*://wqs.jd.com/*",
         "*://msitepp-fm.jd.com/*"
       ],
-      "all_frames": true
+      "all_frames": true,
+      "world": "MAIN"
     },
     {
       "run_at": "document_end",
@@ -48,20 +51,44 @@
     }
   ],
   "icons": {
-    "16": "static/image/16.png",
-    "48": "static/image/48.png",
-    "128": "static/image/128.png"
+    "16": "static/image/icon/16.png",
+    "48": "static/image/icon/48.png",
+    "128": "static/image/icon/128.png"
   },
   "web_accessible_resources": [
-    "static/touch-emulator.js"
+    {
+      "resources": [
+        "static/touch-emulator.js",
+        "static/mobile_script.js",
+        "static/background.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
   ],
   "permissions": [
-    "*://*.jd.com/*",
-    "*://*.jd.hk/*",
-    "webRequest",
-    "webRequestBlocking",
     "alarms",
     "contextMenus",
-    "notifications"
-  ]
+    "notifications",
+    "declarativeNetRequest",
+    "offscreen",
+    "storage"
+  ],
+  "host_permissions": [
+    "*://*.jd.com/*",
+    "*://*.jd.hk/*"
+  ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "ruleset_1",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; img-src 'self' https://*.jd.com data:; connect-src 'self' https://*.jd.com https://www.googleapis.com"
+  }
 }

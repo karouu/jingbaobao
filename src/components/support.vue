@@ -39,9 +39,9 @@
         </div>
         <div class="weui-dialog__bd alipay_pay" v-else>
           <div class="redpack" v-if="target == 'redpack'">
-            <div class="pay_reward switch-paymethod" @click="switchPaymethod('alipay')">
-              <img :src="`https://jjbcdn.zaoshu.so/chrome/alipayred.png`" height="320px">
-              <p class="alipay_action">
+              <div class="pay_reward switch-paymethod" @click="switchPaymethod('alipay')">
+                <!-- Image removed -->
+                <p class="alipay_action">
                 <svg
                   t="1514096092051"
                   class="icon"

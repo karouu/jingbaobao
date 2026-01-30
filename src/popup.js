@@ -18,7 +18,7 @@ Vue.use(Toast);
 
 Vue.use(VueLazyload, {
   preLoad: 1.3,
-  error: 'https://jjbcdn.zaoshu.so/web/img_error.png',
+  error: '',
   attempt: 1
 })
 new Vue({
@@ -28,7 +28,7 @@ new Vue({
 
 
 
-$( document ).ready(function() {
+$(document).ready(function () {
   const paid = localStorage.getItem('jjb_paid');
   const account = localStorage.getItem('jjb_account');
   let loginState = getLoginState()
@@ -37,7 +37,7 @@ $( document ).ready(function() {
   tippy('.tippy')
 
   // 是否已存在弹窗
-  function isNoDialog(){
+  function isNoDialog() {
     return ($(".js_dialog:visible").length < 1) && ($(".weui-dialog:visible").length < 1)
   }
 
@@ -66,7 +66,7 @@ $( document ).ready(function() {
     if ($(this).data('action') == 'paid') {
       chrome.runtime.sendMessage({
         text: "paid"
-      }, function(response) {
+      }, function (response) {
         console.log("Response: ", response);
       });
     } else {
@@ -130,7 +130,7 @@ $( document ).ready(function() {
   $(".openLogin").on("click", function () {
     chrome.runtime.sendMessage({
       text: "openLogin",
-    }, function(response) {
+    }, function (response) {
       console.log("Response: ", response);
     });
   })

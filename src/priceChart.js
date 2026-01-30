@@ -9,7 +9,6 @@ function getSetting(name, cb) {
     content: name
   }, function (response) {
     cb(response)
-    console.log("getSetting Response: ", name, response);
   });
 }
 
@@ -43,7 +42,7 @@ function renderDom() {
 
 }
 function timestampToDateNumber(timestamp) {
-  return new Date(timestamp).toISOString().slice(0,10).replace(/-/g,"")
+  return new Date(timestamp).toISOString().slice(0, 10).replace(/-/g, "")
 }
 
 var slideIndex = 1;
@@ -51,18 +50,18 @@ function showPromotions(n) {
   var i;
   var x = document.getElementsByClassName("special-promotion-item");
   slideIndex = n
-  if (n > x.length) {slideIndex = 1}
-  if (n < 1) {slideIndex = x.length} ;
+  if (n > x.length) { slideIndex = 1 }
+  if (n < 1) { slideIndex = x.length };
   for (i = 0; i < x.length; i++) {
     x[i].style.display = "none";
   }
   $(`#specialPromotion .controller .item__child`).removeClass('on')
   setTimeout(() => {
-    $(`#specialPromotion .controller .item__child:eq(${slideIndex-1})`).addClass('on')
+    $(`#specialPromotion .controller .item__child:eq(${slideIndex - 1})`).addClass('on')
   }, 10);
-  console.log('showPromotions', n, slideIndex, x[slideIndex-1])
-  if (x[slideIndex-1]) {
-    x[slideIndex-1].style.display = "block";
+
+  if (x[slideIndex - 1]) {
+    x[slideIndex - 1].style.display = "block";
   }
 }
 
@@ -70,7 +69,7 @@ function showPromotions(n) {
 function dealWithPriceDate(data) {
   if (data.chart.length > 2) {
     $("#jjbPriceChart").html('')
-    console.log("dealWithPriceDate",$("#jjbPriceChart"))
+
     let specialPromotion = data.specialPromotion
     let chart = new Chart({
       container: 'jjbPriceChart',
@@ -90,14 +89,16 @@ function dealWithPriceDate(data) {
       min: data.averagePrice ? (data.averagePrice / 3) : 0,
       nice: true,
     });
-    chart.line().position('timestamp*value').shape('hv').color('key').tooltip({ fields: [ 'key', 'value', 'timestamp' ], callback: (key, value, timestamp) => {
-      const itemDate = timestampToDateNumber(timestamp)
-      return {
-        key,
-        value: value,
-        date: itemDate,
-      };
-    }});
+    chart.line().position('timestamp*value').shape('hv').color('key').tooltip({
+      fields: ['key', 'value', 'timestamp'], callback: (key, value, timestamp) => {
+        const itemDate = timestampToDateNumber(timestamp)
+        return {
+          key,
+          value: value,
+          date: itemDate,
+        };
+      }
+    });
     chart.tooltip(
       {
         showCrosshairs: true, // 展示 Tooltip 辅助线
@@ -131,7 +132,7 @@ function dealWithPriceDate(data) {
       specialPromotionDom += `<div class="special-promotion-item"><a class="promotion-item" style="${item.style}" href="${item.url}" target="_break">${item.icon ? `<span class="icon"><img src="${item.icon}"/></span>` : ''}${item.title}</a></div>`
     });
     let specialPromotionControllerDom = ``
-    specialPromotion &&specialPromotion.forEach((item, index) => {
+    specialPromotion && specialPromotion.forEach((item, index) => {
       specialPromotionControllerDom += `<span class="item__child" data-index="${index}"></span>`
     });
     $("#specialPromotion").html(`
@@ -140,16 +141,16 @@ function dealWithPriceDate(data) {
     `)
     chart.render();
     setTimeout(() => {
-      showPromotions(Math.floor(Math.random()*specialPromotion.length) + 1);
-      $( "#specialPromotion .controller .item__child" ).on( "click", function() {
+      showPromotions(Math.floor(Math.random() * specialPromotion.length) + 1);
+      $("#specialPromotion .controller .item__child").on("click", function () {
         let index = $(this).data('index');
-        console.log('index', index)
-        showPromotions(index+1)
+
+        showPromotions(index + 1)
       });
     }, 50);
 
     setInterval(() => {
-      showPromotions(Math.floor(Math.random()*specialPromotion.length) + 1);
+      showPromotions(Math.floor(Math.random() * specialPromotion.length) + 1);
     }, 30000);
   } else {
     $("#jjbPriceChart").html(`<div class="no_data">暂无数据</div>`)
@@ -158,7 +159,7 @@ function dealWithPriceDate(data) {
 
 
 function getPriceChart(sku, days = 30) {
-  console.log("getPriceChart", sku, days)
+
   chrome.runtime.sendMessage({
     action: "getPriceChart",
     sku: sku,
@@ -176,7 +177,7 @@ function showError(sku, error) {
 
 // 应用消息
 chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
-  console.log('onMessage', message)
+
   switch (message.type) {
     case 'priceChart':
       if (message.error) {
@@ -191,7 +192,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
 getSetting('disable_pricechart', function (disable) {
   if (disable == "checked") {
-    console.log('价格走势图已禁用')
+    // console.log('价格走势图已禁用')
   } else {
     renderDom()
     setTimeout(function () {
@@ -212,14 +213,13 @@ getSetting('disable_pricechart', function (disable) {
             key: "disable_pricechart",
             value: "checked"
           },
-          function (response) {
-            weui.toast('停用成功', 1000);
-            $(".jjbPriceChart").hide()
-            console.log("disablePriceChart Response: ", response);
-          });
+            function (response) {
+              weui.toast('停用成功', 1000);
+              $(".jjbPriceChart").hide()
+            });
           $('.jjbPriceChart').hide()
         }, function () {
-          console.log('no')
+          // console.log('no')
         }, {
           title: '停用价格走势图'
         });

@@ -88,7 +88,7 @@ async function addTaskLog(task) {
     mode: task.mode,
     results: []
   });
-  console.log('addTaskLog', log, timestamp)
+
 }
 
 async function findAndUpdateTaskResult(taskId, result) {
@@ -96,7 +96,7 @@ async function findAndUpdateTaskResult(taskId, result) {
   const lastRunLog = (await db.taskLogs.where('timestamp').above(last5Minute).reverse().sortBy('timestamp')).find((log) => {
     return log.taskId == taskId
   })
-  console.log('lastRunLog', taskId, lastRunLog, result)
+
   if (lastRunLog) {
     await db.taskLogs.where('id').equals(lastRunLog.id).modify(log => {
       log.results.push(result);
