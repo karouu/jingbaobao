@@ -30,7 +30,6 @@ app.mount('#app');
 
 
 $(document).ready(function () {
-  const paid = localStorage.getItem('jjb_paid');
   const account = localStorage.getItem('jjb_account');
   let loginState = getLoginState()
 
@@ -42,12 +41,7 @@ $(document).ready(function () {
     return ($(".js_dialog:visible").length < 1) && ($(".weui-dialog:visible").length < 1)
   }
 
-  // 常规弹窗延迟200ms
   setTimeout(() => {
-    if (paid) {
-      $("#dialogs").hide()
-    }
-
     // 没有弹框 且 未登录账号
     if (isNoDialog() && (!account && loginState.class == "failed") || loginState.class == "unknown") {
       $("#loginNotice").show();
@@ -64,17 +58,6 @@ $(document).ready(function () {
     $("#listenAudio").hide()
     $("#loginNotice").hide()
     $("#changeLogs").hide()
-    if ($(this).data('action') == 'paid') {
-      chrome.runtime.sendMessage({
-        text: "paid"
-      }, function (response) {
-        console.log("Response: ", response);
-      });
-    } else {
-      if ($(this).data('action') == 'pay') {
-        showReward()
-      }
-    }
   })
 
   $("#listen").on("click", function () {

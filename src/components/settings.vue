@@ -155,11 +155,6 @@
             <div class="tips bottom-tips">
               <p class="page__desc" v-if="notice">
                 <a id="notice" @dblclick="changeTips">{{notice.text}}</a>
-                <span
-                  v-if="notice.type == 'reward' && notice.button"
-                  class="weui-btn weui-btn_mini weui-btn_primary switch-paymethod"
-                  @click="switchPaymethod('wechat', notice.target)"
-                >{{notice.button}}</span>
                 <a
                   v-if="notice.type == 'link' && notice.button && notice.mode != 'mobliepage'"
                   class="weui-btn weui-btn_mini weui-btn_primary"
@@ -507,34 +502,8 @@
           :title="loginState.description"
         ></a>
       </div>
-      <div class="action-list">
-        <span class="el-tag el-tag--success">
-          <a
-            href="#"
-            class="switch-paymethod tippy"
-            @click="switchPaymethod('wechat', 'ming')"
-            data-tippy-placement="top-start"
-            data-tippy-content="打赏开发者"
-          >打赏开发者</a>
-        </span>
-        <span class="el-tag el-tag--danger" style="margin-left: 3px;">
-          <a
-            href="#"
-            class="switch-paymethod"
-            @click="switchPaymethod('alipay', 'redpack')"
-            title="天天领支付宝红包"
-            v-tippy
-          >支付宝红包</a>
-        </span>
-        <links></links>
-      </div>
     </div>
-    <support
-      v-if="showSupport"
-      @close="showSupport = false"
-      :initialPaymethod="paymethod"
-      :initialTarget="target"
-    ></support>
+
     <!-- 试听音效 -->
     <div id="listenAudio" v-if="listenAudio">
       <div class="js_dialog" style="opacity: 1;">
@@ -581,16 +550,7 @@
             </div>
           </div>
           <div class="weui-dialog__ft">
-            <a
-              class="weui-dialog__btn weui-dialog__btn_primary switch-paymethod"
-              @click="() => {
-                listenAudio = false;
-                switchPaymethod('wechat', 'samedi')
-              }"
-            >
-              <i class="weui-icon-success"></i>打赏声优
-            </a>
-            <a class="weui-dialog__btn weui-dialog__btn_default" @click="listenAudio = false">下次吧</a>
+            <a class="weui-dialog__btn weui-dialog__btn_primary" @click="listenAudio = false">关闭</a>
           </div>
         </div>
       </div>
@@ -611,8 +571,6 @@ import { frequencyOptionText, getTasks } from "../tasks";
 import { recommendServices, notices } from "../variables";
 import { getSetting, saveSetting } from "../utils";
 import taskSetting from "./task-setting.vue";
-import support from "./support.vue";
-import links from "./links.vue";
 import weDialog from "./we-dialog.vue";
 
 const settingKeys = [
@@ -633,7 +591,7 @@ const settingKeys = [
 export default {
   name: "settings",
   props: ["loginState"],
-  components: { taskSetting, support, links, weDialog },
+  components: { taskSetting, weDialog },
   data() {
     return {
       frequencyOptionText: frequencyOptionText,
@@ -666,12 +624,7 @@ export default {
       },
       dialog: {},
       showDialog: false,
-      notice: {
-        text: "京东页面经常更新，唯有你的支持才能让京价保保持更新。",
-        type: "reward",
-        target: "ming",
-        button: "打赏"
-      }
+      notice: null
     };
   },
   mounted: async function() {
@@ -871,11 +824,6 @@ export default {
     },
     showLogin: function() {
       this.$emit("show-login");
-    },
-    switchPaymethod: function(paymethod, target) {
-      this.paymethod = paymethod;
-      this.target = target;
-      this.showSupport = true;
     },
     updateDisableOrderLink: function() {
       this.$emit("update-order-link");

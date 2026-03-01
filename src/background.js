@@ -183,7 +183,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!msg.action) {
     msg.action = msg.text
   }
-  
+
   let task
   let loginState = getLoginState()
   let hourInYear = DateTime.local().toFormat("oHH")
@@ -325,16 +325,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             account.autoLoginQuota = autoLoginQuota[hourInYear][msg.type]
           }
           done(account)
-          break;
-        case 'paid':
-          localStorage.setItem('jjb_paid', 'Y');
-          sendChromeNotification(new Date().getTime().toString(), {
-            type: "basic",
-            title: "谢谢老板",
-            message: "我会努力签到、领券、申请价格保护来回报你的",
-            iconUrl: 'static/image/128.png'
-          })
-          done({ result: "thank_you" })
           break;
         case 'openLogin':
           openLoginPage(loginState)
