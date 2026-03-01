@@ -2,7 +2,6 @@ import { DateTime } from 'luxon'
 import { getLoginState } from './account'
 import { getSetting, readableTime } from './utils'
 import { getTaskUsageImmediately, getTodayMessagesByTaskIdImmediately } from './db'
-import selectors from './config/selectors.json'
 
 const priceProUrl = "https://msitepp-fm.jd.com/rest/priceprophone/priceProPhoneMenu"
 const frequencyOptionText = {
@@ -18,11 +17,7 @@ const mapFrequency = {
   'never': 99999
 }
 
-const mapReward = {
-  'goldCoin': "金币",
-  'bean': "京豆",
-  'coin': "钢镚"
-}
+
 
 
 const tasks = [
@@ -70,254 +65,6 @@ const tasks = [
       hour: 2
     }
   },
-  // 已弃用
-  {
-    id: '3',
-    src: {
-      m: 'https://plus.m.jd.com/index',
-    },
-    title: 'PLUS专享券',
-    description: "当然啦，你得先是PLUS会员才能领到（不是每月定额100的全品类券）",
-    mode: 'iframe',
-    frequencyOption: ['2h', '5h', 'daily', 'never'],
-    type: ['m'],
-    frequency: '5h',
-    location: {
-      host: ['plus.m.jd.com'],
-      pathname: ['/index']
-    },
-    rateLimit: {
-      weekly: 32,
-      daily: 4,
-      hour: 2
-    },
-    deprecated: true
-  },
-  // 已弃用
-  {
-    id: '4',
-    src: {
-      m: 'https://m.jr.jd.com/member/rightsCenter/#/coupon',
-    },
-    title: '精选白条券',
-    mode: 'iframe',
-    frequencyOption: ['2h', '5h', 'daily', 'never'],
-    type: ['m'],
-    frequency: '5h',
-    location: {
-      host: ['m.jr.jd.com'],
-      pathname: ['/member/rightsCenter/'],
-      hash: ["#/coupon"]
-    },
-    rateLimit: {
-      weekly: 32,
-      daily: 4,
-      hour: 2
-    },
-    deprecated: true
-  },
-  {
-    id: '21',
-    src: {
-      pc: '',
-    },
-    baseUrl: 'https://a.jd.com',
-    title: '话费充值券',
-    description: "领取京东最新的话费充值券",
-    mode: 'iframe',
-    type: ['pc'],
-    schedule: [10, 12, 14, 18, 20],
-    frequencyOption: ['daily', 'never'],
-    frequency: 'daily',
-    location: {
-      host: ['a.jd.com']
-    },
-    deprecated: true,
-    selector: selectors.tasks['21'].selector,
-    rateLimit: {
-      weekly: 32,
-      daily: 4,
-      hour: 2
-    }
-  },
-  // 已失效
-  {
-    id: '29',
-    src: {
-      m: 'https://red-e.jd.com/resources/pineapple/index.html',
-    },
-    title: '每日镚一镚',
-    key: "pineapple",
-    description: "京东每日镚一镚领取钢镚",
-    mode: 'iframe',
-    type: ['m'],
-    checkin: true,
-    frequencyOption: ['daily', 'never'],
-    frequency: 'daily',
-    location: {
-      host: ['red-e.jd.com'],
-      pathname: ['/resources/pineapple/index.html']
-    },
-    new: true,
-    rateLimit: {
-      weekly: 14,
-      daily: 3,
-      hour: 2
-    },
-    deprecated: true
-  },
-  // 已失效
-  {
-    id: '23',
-    src: {
-      m: 'https://m.jr.jd.com/vip/activity/newperback/index.html',
-    },
-    title: '单单返京豆',
-    description: "京东支付购物单单返京豆",
-    mode: 'iframe',
-    type: ['m'],
-    frequencyOption: ['daily', 'never'],
-    frequency: 'daily',
-    location: {
-      host: ['m.jr.jd.com'],
-      pathname: ['/vip/activity/newperback/index.html']
-    },
-    new: true,
-    rateLimit: {
-      weekly: 14,
-      daily: 3,
-      hour: 2
-    },
-    deprecated: true
-  },
-  // 已失效
-  {
-    id: '5',
-    src: {
-      m: 'https://vip.m.jd.com/page/signin',
-    },
-    title: '京东会员签到',
-    description: "京东会员移动页每日签到领京豆",
-    mode: 'iframe',
-    key: "vip",
-    type: ['m'],
-    checkin: true,
-    frequencyOption: ['daily', 'never'],
-    frequency: 'daily',
-    rateLimit: {
-      weekly: 32,
-      daily: 4,
-      hour: 2
-    },
-    deprecated: true
-  },
-  {
-    id: '14', // 已失效
-    src: {
-      m: 'https://coin.jd.com/m/gb/index.html',
-    },
-    title: '钢镚每日签到',
-    key: "coin",
-    checkin: true,
-    mode: 'iframe',
-    type: ['m'],
-    frequencyOption: ['daily', 'never'],
-    frequency: 'daily',
-    location: {
-      host: ['coin.jd.com'],
-      pathname: ['/m/gb/index.html']
-    },
-    rateLimit: {
-      weekly: 32,
-      daily: 4,
-      hour: 2
-    },
-    deprecated: true
-  },
-  {
-    id: '6', // 已失效
-    src: {
-      m: 'https://m.jr.jd.com/spe/qyy/main/index.html?userType=41',
-    },
-    title: '金融钢镚签到',
-    description: "京东金融惠赚钱每日签到有钢镚奖励",
-    key: "jr-qyy",
-    mode: 'iframe',
-    type: ['m'],
-    checkin: true,
-    frequencyOption: ['daily', 'never'],
-    frequency: 'daily',
-    rateLimit: {
-      weekly: 32,
-      daily: 4,
-      hour: 2
-    },
-    deprecated: true
-  },
-  {
-    id: '9', // 已经失效
-    src: {
-      m: 'https://uf.jr.jd.com/activities/sign/v5/index.html',
-    },
-    title: '金融会员签到',
-    description: "京东金融会员签到，需要实名认证",
-    key: "jr-index",
-    checkin: true,
-    mode: 'iframe',
-    type: ['m'],
-    frequencyOption: ['daily', 'never'],
-    frequency: 'daily',
-    location: {
-      host: ['uf.jr.jd.com'],
-      pathname: ['/activities/sign/v5/index.html']
-    },
-    rateLimit: {
-      weekly: 32,
-      daily: 4,
-      hour: 2
-    },
-    deprecated: true
-  },
-  // 已经失效
-  {
-    id: '11',
-    src: {
-      m: 'https://bean.m.jd.com',
-    },
-    title: '每日京豆签到',
-    key: "bean",
-    checkin: true,
-    mode: 'iframe',
-    type: ['m'],
-    frequencyOption: ['daily', 'never'],
-    frequency: 'daily',
-    rateLimit: {
-      weekly: 32,
-      daily: 4,
-      hour: 2
-    },
-    deprecated: true
-  },
-  {
-    id: '12', // 已经失效
-    src: {
-      m: 'https://m.jr.jd.com/integrate/signin/index.html',
-    },
-    title: '领取双签奖励',
-    description: "完成京豆和京东金融签到有一个双签奖励",
-    key: "double_check",
-    mode: 'iframe',
-    type: ['m'],
-    checkin: true,
-    location: {
-      host: ['m.jr.jd.com'],
-      pathname: ['/integrate/signin/index.html']
-    },
-    frequencyOption: ['daily', 'never'],
-    frequency: 'daily',
-    deprecated: true
-  },
-  // 已弃用
   {
     id: '16',
     src: {
@@ -337,33 +84,6 @@ const tasks = [
       hour: 2
     }
   },
-  // 已弃用
-  {
-    id: '30',
-    src: {
-      m: 'https://vip.jd.com/newPage/reward',
-    },
-    key: "swing-reward",
-    title: '摇一摇领京豆',
-    description: "摇一摇领领京豆",
-    mode: 'iframe',
-    type: ['m'],
-    checkin: true,
-    frequencyOption: ['daily', 'never'],
-    frequency: 'daily',
-    location: {
-      host: ['vip.jd.com'],
-      pathname: ['/newPage/reward']
-    },
-    new: true,
-    rateLimit: {
-      weekly: 32,
-      daily: 4,
-      hour: 2
-    },
-    deprecated: true
-  },
-  // 已弃用
   {
     id: '22',
     src: {
@@ -381,39 +101,11 @@ const tasks = [
       host: ['member.jr.jd.com'],
       pathname: ['/gcmall/']
     },
-    new: true,
     rateLimit: {
       weekly: 14,
       daily: 3,
       hour: 2
     }
-  },
-  // 已弃用
-  {
-    id: '31',
-    src: {
-      m: 'https://m.jr.jd.com/member/rightsCenter/#/white',
-    },
-    key: "rights-center",
-    title: '白条优惠券抽奖',
-    description: "京东金融权益中心白条优惠券",
-    mode: 'iframe',
-    type: ['m'],
-    checkin: true,
-    frequencyOption: ['daily', 'never'],
-    frequency: 'daily',
-    location: {
-      host: ['m.jr.jd.com'],
-      pathname: ['/member/rightsCenter/'],
-      hash: ["#/white"]
-    },
-    new: true,
-    rateLimit: {
-      weekly: 32,
-      daily: 4,
-      hour: 2
-    },
-    deprecated: true
   },
   {
     id: '32',
@@ -488,7 +180,7 @@ let getTask = function (taskId, currentPlatform) {
     if (task.messages.length > 0) {
       let lastDone = task.messages[0]
       taskStatus.checked = true
-      taskStatus.checkin_description = "最近一次完成于：" + readableTime(DateTime.fromMillis(lastDone.timestamp)) + (lastDone.value ? "，领到：" + lastDone.value : "") + (lastDone.reward ? mapReward[lastDone.reward] : "");
+      taskStatus.checkin_description = "最近一次完成于：" + readableTime(DateTime.fromMillis(lastDone.timestamp)) + (lastDone.value ? "，领到：" + lastDone.value : "") + (lastDone.reward ? ({ goldCoin: "金币", bean: "京豆", coin: "钢镚" }[lastDone.reward] || "") : "");
     }
   }
 
