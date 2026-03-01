@@ -68,35 +68,6 @@ $(document).ready(function () {
     $("#loginNotice").show()
   })
 
-  $("#openFeedback").on("click", function () {
-    // 加载反馈
-    if ($("#feedbackIframe").attr('src') == '') {
-      $("#feedbackIframe").attr('src', `https://i.duotai.net/forms/yovwz?version=${process.env.VERSION}`)
-      setTimeout(function () {
-        $('.iframe-loading').hide()
-      }, 800)
-    }
-    $("#feedbackDialags").show()
-  })
-
-  $("#openFaq").on("click", function () {
-    // 加载反馈
-    if ($("#faqIframe").attr('src') == '') {
-      $("#faqIframe").attr('src', "https://i.duotai.net/forms/oqyvk/1lpb11l2")
-      setTimeout(function () {
-        $('.iframe-loading').hide()
-      }, 800)
-    }
-    $("#faqDialags").show()
-  })
-
-  $("#feedbackDialags .js-close").on("click", function () {
-    $("#feedbackDialags").hide()
-  })
-
-  $("#faqDialags .js-close").on("click", function () {
-    $("#faqDialags").hide()
-  })
 
   $("#jEventDialags .js-close").on("click", function () {
     $("#jEventDialags").hide()

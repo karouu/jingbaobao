@@ -248,68 +248,6 @@
                 </div>
               </div>
             </div>
-            <div class="other_actions">
-              <div class="recommendation">
-                <h3 style="text-align: center;color: #666;">服务推荐</h3>
-                <p class="recommendServices">
-                  <span
-                    :class="service.class"
-                    v-for="service in recommendServices"
-                    :key="service.title"
-                  >
-                    <a
-                      v-if="service.type == 'dialog'"
-                      href="#"
-                      data-tippy-placement="top-start"
-                      :data-tippy-content="service.description"
-                      :style="service.linkStyle"
-                      :class="service.linkClass"
-                      @click="openDialog(service)"
-                    >{{service.title}}</a>
-                    <a
-                      v-else
-                      target="_blank"
-                      v-tippy
-                      :title="service.description"
-                      :href="service.link"
-                    >{{service.title}}</a>
-                  </span>
-                </p>
-                <div class="recommendedLink">
-                  <p v-for="link in recommendedLinks" :key="link.title">
-                    <a
-                      v-if="link.mobile"
-                      @click="openMobilePage(link.url)"
-                      :style="link.style"
-                    >{{link.title}}</a>
-                    <a
-                      v-else
-                      :href="link.url"
-                      :style="link.style"
-                      class="weui-form-preview__btn weui-form-preview__btn_primary"
-                      target="_blank"
-                    >{{link.title}}</a>
-                  </p>
-                </div>
-              </div>
-              <h3 style="text-align: center;color: #666;">关注京价保</h3>
-              <p style="text-align: center;margin-top: -10px;">
-                <a
-                  href="https://t.me/jingjiabao"
-                  class="weui-btn weui-btn_mini weui-btn_plain-default tippy"
-                  data-tippy-placement="top-start"
-                  data-tippy-content="通过电报群接收京价保的最新消息"
-                  target="_blank"
-                >京价保@Telegram</a>
-                <a
-                  @click="openWechatCard"
-                  href="#"
-                  class="weui-btn weui-btn_mini weui-btn_plain-default tippy"
-                  data-tippy-placement="top-start"
-                  data-tippy-content="关注京价保的公众号"
-                >京价保公众号</a>
-              </p>
-            </div>
           </div>
           <div class="other_settings settings_box" v-show="activeTab == 'other_settings'">
             <div class="weui-cells weui-cells_form">
@@ -456,26 +394,6 @@
               </div>
             </div>
             <div class="other_actions">
-              <p class="help_btns" style="text-align: center;">
-                <span class="el-tag el-tag--success">
-                  <a
-                    href="#"
-                    id="openFeedback"
-                    data-tippy-placement="top-start"
-                    class="tippy"
-                    data-tippy-content="向作者提供功能建议或京东活动的地址，帮助京价保及时更新"
-                  >建议反馈</a>
-                </span>
-                <span class="el-tag el-tag--warning">
-                  <a
-                    href="https://blog.jjb.im/faq.html"
-                    target="_blank"
-                    data-tippy-placement="top-start"
-                    class="tippy"
-                    data-tippy-content="了解一些常见问题的解答"
-                  >常见问题</a>
-                </span>
-              </p>
               <p style="text-align: center;">
                 <a
                   href="#"
@@ -568,7 +486,6 @@
 
 <script>
 import { frequencyOptionText, getTasks } from "../tasks";
-import { recommendServices, notices } from "../variables";
 import { getSetting, saveSetting } from "../utils";
 import taskSetting from "./task-setting.vue";
 import weDialog from "./we-dialog.vue";
@@ -595,16 +512,11 @@ export default {
   data() {
     return {
       frequencyOptionText: frequencyOptionText,
-      recommendServices: getSetting("recommendServices", recommendServices),
-      recommendedLinks: getSetting("recommendedLinks", []),
       currentVersion: process.env.VERSION,
       scienceOnline: false,
       listenAudio: false,
       activeTab: "frequency_settings",
       taskType: "enabled",
-      paymethod: "weixin",
-      target: "ming",
-      showSupport: false,
       currentSettingTask: null,
       taskList: [],
       hover: null,
@@ -770,28 +682,6 @@ export default {
         .catch(() => {
           console.log("取消清除");
         });
-    },
-    openWechatCard: async function() {
-      this.dialog = {
-        title: "关注京价保公众号",
-        content: `
-          <p class="tips">主要发布更新通知，亦可在公众号留言向开发者反馈。</p>
-        `
-      };
-      this.showDialog = true;
-    },
-    openDialog: async function(action) {
-      this.dialog = {
-        title: action.title,
-        content: action,
-        buttons: [
-          {
-            label: "完成",
-            type: "primary"
-          }
-        ]
-      };
-      this.showDialog = true;
     },
     tryGoogle: async function() {
       try {

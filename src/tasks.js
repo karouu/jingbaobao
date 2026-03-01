@@ -17,9 +17,6 @@ const mapFrequency = {
   'never': 99999
 }
 
-
-
-
 const tasks = [
   {
     id: '1',
