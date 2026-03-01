@@ -345,8 +345,10 @@ async function dealProduct(product, orderInfo, setting) {
   let applyBtn = product.find('.item-opt .apply').text() ? product.find('.item-opt .apply') : product.find('.btn a')
   let orderId = applyBtn.attr('id') ? applyBtn.attr('id').split('_') : null
 
-  // console.log('找不到 orderId')
-  return
+  if (!orderId || orderId.length < 3) {
+    // console.log('找不到 orderId')
+    return
+  }
 
   let orderCountDom = product.find('.price-count .count').text() ? product.find('.price-count .count') : product.find('.item-name .count')
   let order_quantity = Number(orderCountDom.text().trim().replace(/[^0-9\.-]+/g, ""))
@@ -414,8 +416,20 @@ async function dealProduct(product, orderInfo, setting) {
 async function dealOrder(order, validProducts, setting) {
 
 
-  let order_time = order.find('span.time').text() ? new Date(order.find('span.time').text()) : new Date(order.find('.title span').last().text().trim().split('：')[1])
-  let order_id = order.find('span.order').text() ? order.find('span.order').text().replace(/[^0-9\.-]+/g, "") : order.find('.title .order-code').text().trim().split('：')[1]
+  let order_time_text = order.find('span.time').text() || order.find('.title span').last().text().trim().split('：')[1]
+  let order_time;
+  if (order_time_text) {
+    order_time = new Date(order_time_text)
+  } else {
+    order_time = new Date() // fallback
+  }
+
+  let order_id = order.find('span.order').text() ? order.find('span.order').text().replace(/[^0-9\.-]+/g, "") : (order.find('.title .order-code').text() ? order.find('.title .order-code').text().trim().split('：')[1] : null)
+
+  if (!order_id) {
+    console.warn('Cannot find order ID block, skipping');
+    return;
+  }
 
   let orderInfo = {
     id: order_id,
@@ -440,6 +454,7 @@ async function dealOrder(order, validProducts, setting) {
       try {
         await dealProduct($(productElement), orderInfo, setting)
       } catch (error) {
+        console.error('Error dealing with product:', error)
       }
     }, time);
     time += 2000;
@@ -472,6 +487,7 @@ async function getAllOrders(mode, setting) {
         try {
           await dealOrder(orderElement, validProducts, setting)
         } catch (error) {
+          console.error('Error dealing with mode m order:', error)
         }
       }, time);
       time += 3000;
@@ -943,7 +959,7 @@ function handProtection(setting, priceInfo) {
     let buyDom = $("#InitCartUrl").length > 0 ? $("#InitCartUrl") : $("#btn-reservation")
     let item = $(".ellipsis").text()
     let price = priceInfo ? (priceInfo.normal_price || priceInfo.plus_price) : ($('.p-price .price').text() ? $('.p-price .price').text().replace(/[^0-9\.-]+/g, "") : null) || ($('#jd-price').text() ? $('#jd-price').text().replace(/[^0-9\.-]+/g, "") : null)
-    
+
     // Create dialogMsg safely
     let dialogMsg = document.createElement('dialog');
     dialogMsg.id = 'dialogMsg';
@@ -961,7 +977,7 @@ function handProtection(setting, priceInfo) {
       if ($("#dialog").length > 0) {
         $("#dialog").remove()
       }
-      
+
       // Create main dialog safely
       let dialog = document.createElement('dialog');
       dialog.id = 'dialog';
@@ -982,17 +998,17 @@ function handProtection(setting, priceInfo) {
       let considerationDiv = document.createElement('div');
       considerationDiv.className = 'consideration';
       const questions = [
-          '它是必须的吗？使用的频率足够高吗？',
-          '它真的可以解决你的需求吗？现有方案完全无法接受吗？',
-          '如果收到不合适，它在试用之后退款方便吗？',
-          '现在购买它的价格 ¥' + price + ' 合适吗？'
+        '它是必须的吗？使用的频率足够高吗？',
+        '它真的可以解决你的需求吗？现有方案完全无法接受吗？',
+        '如果收到不合适，它在试用之后退款方便吗？',
+        '现在购买它的价格 ¥' + price + ' 合适吗？'
       ];
       if (Number(count) > 1) questions.push('有必要现在购买 ' + count + '个吗？');
 
       questions.forEach(q => {
-          let p = document.createElement('p');
-          p.textContent = q;
-          considerationDiv.appendChild(p);
+        let p = document.createElement('p');
+        p.textContent = q;
+        considerationDiv.appendChild(p);
       });
       form.appendChild(considerationDiv);
 
@@ -1967,13 +1983,13 @@ if (window.location.host != 'pcashier.jd.com') {
         CheckDom()
       }, 1200)
     }
-}
+  }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', onReady);
-} else {
-  onReady();
-}
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', onReady);
+  } else {
+    onReady();
+  }
 }
 
 // 消息

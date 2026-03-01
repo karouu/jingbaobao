@@ -345,7 +345,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           done({ result: "mobile_page_opened" })
           break;
         case 'openPricePro':
-          chrome.tabs.create({
+          chromeTabs.create({
             url: "https://pcsitepp-fm.jd.com/"
           })
           done({ result: "price_pro_opened" })
@@ -566,9 +566,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // 查询消息列表
         case 'getMessages':
           await new Promise(resolve => setTimeout(resolve, 50));
-          await updateMessages();
+          let messages = await updateMessages();
           saveSetting('lastOpenPopupAt', DateTime.local().toISO())
-          done({ result: "messages_updated" })
+          done({ result: "messages_updated", messages: messages })
           break;
         case 'clearUnread':
           updateUnreadCount(-999)

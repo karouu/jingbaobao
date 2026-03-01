@@ -42,13 +42,11 @@ export default {
     confirm() {
       this.isShowMessageBox = false;
       this.resolve('confirm');
-      this.remove();
     },
     // 取消,将promise断定为reject状态
     cancel() {
       this.isShowMessageBox = false;
       this.reject('cancel');
-      this.remove();
     },
     // 弹出messageBox,并创建promise对象
     showMsgBox() {
@@ -59,15 +57,6 @@ export default {
       });
       // 返回promise对象
       return this.promise;
-    },
-    remove() {
-      setTimeout(() => {
-        this.destroy();
-      }, 100);
-    },
-    destroy() {
-      this.$destroy();
-      document.body.removeChild(this.$el);
     },
 
   }

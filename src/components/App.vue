@@ -680,7 +680,11 @@ export default {
     renderMessages: function(messages) {
       if (!messages) {
         messages = getSetting("jjb_messages", []);
-        chrome.runtime.sendMessage({ action: "getMessages" });
+        chrome.runtime.sendMessage({ action: "getMessages" }, (response) => {
+          if (response && response.messages) {
+            this.renderMessages(response.messages);
+          }
+        });
       }
       this.messages = messages.map(function(message) {
         if (message.type == "coupon") {

@@ -67,6 +67,7 @@ async function updateMessages() {
     action: "messages_updated",
     messages: messages
   });
+  return messages;
 }
 
 async function getTodayMessagesByTaskId(taskId) {
