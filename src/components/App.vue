@@ -643,6 +643,11 @@ export default {
       });
       return promotions;
     },
+    backup_picture: function(event) {
+      if (event && event.target) {
+        event.target.style.display = 'none';
+      }
+    },
     renderMessages: function(messages) {
       if (!messages) {
         messages = getSetting("jjb_messages", []);

@@ -647,7 +647,7 @@ export default {
     },
     // 换 Tips
     changeTips: function() {
-      let announcements = getSetting("announcements", []).concat(notices);
+      let announcements = getSetting("announcements", []);
       let tip = announcements[Math.floor(Math.random() * announcements.length)];
       this.notice = tip;
     },
