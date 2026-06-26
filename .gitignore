@@ -4,3 +4,4 @@ yarn-error.log
 build
 dist/
 package-lock.json
+tmp/
