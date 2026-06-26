@@ -127,15 +127,6 @@ export default {
         case 'checkin_notice':
           return "签到成功"
           break;
-        case 'beanReceived':
-          return "收到京豆"
-          break;
-        case 'goldCoinReceived':
-          return "收到金币"
-          break;
-        case 'couponReceived':
-          return "优惠券领取"
-          break;
         case 'create_tab':
           return "开标签页"
           break;

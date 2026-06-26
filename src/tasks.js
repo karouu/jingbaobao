@@ -26,7 +26,7 @@ const tasks = [
     },
     title: '价格保护',
     description: "价格保护只显示京东系统尚在价保有效期内的商品",
-    mode: 'iframe',
+    mode: 'tab',
     type: ['pc', 'm'],
     frequencyOption: ['2h', '5h', 'daily', 'never'],
     frequency: '5h',
@@ -40,68 +40,26 @@ const tasks = [
     }
   },
   {
-    id: '15',
+    id: '11',
     src: {
-      pc: 'https://a.jd.com',
+      pc: 'https://bean.jd.com/myJingBean/list',
     },
-    url: 'https://a.jd.com',
-    title: '全品类券',
-    description: "每天尝试领取全品类券（29减2/105减5/500减20/1000减30）",
-    schedule: [10, 12, 14, 16, 18, 20, 22],
-    mode: 'iframe',
-    location: {
-      host: ['a.jd.com'],
-      pathname: ['/']
-    },
+    title: '每日京豆签到',
+    description: '打开我的京豆页面，每日签到领取京豆',
+    key: 'bean',
+    checkin: true,
+    mode: 'tab',
     type: ['pc'],
-    frequencyOption: ['5h', 'daily', 'never'],
-    frequency: '5h',
-    rateLimit: {
-      weekly: 55,
-      daily: 10,
-      hour: 2
-    }
-  },
-  {
-    id: '16',
-    src: {
-      m: 'https://m.jr.jd.com/btyingxiao/marketing/html/index.html',
-    },
-    title: '白条免息红包',
-    description: "大部分情况获得京豆，也有可能白条券",
-    key: "baitiao",
-    checkin: true,
-    mode: 'iframe',
-    type: ['m'],
-    frequencyOption: ['daily', 'never'],
-    frequency: 'daily',
-    rateLimit: {
-      weekly: 32,
-      daily: 4,
-      hour: 2
-    }
-  },
-  {
-    id: '22',
-    src: {
-      m: 'https://member.jr.jd.com/gcmall/',
-    },
-    key: "gcmall",
-    checkin: true,
-    title: '领取金融金币',
-    description: "领取京东金融各种返金币",
-    mode: 'iframe',
-    type: ['m'],
     frequencyOption: ['daily', 'never'],
     frequency: 'daily',
     location: {
-      host: ['member.jr.jd.com'],
-      pathname: ['/gcmall/']
+      host: ['bean.jd.com'],
+      pathname: ['/myJingBean/list']
     },
     rateLimit: {
       weekly: 14,
-      daily: 3,
-      hour: 2
+      daily: 6,
+      hour: 4
     }
   },
   {
@@ -112,7 +70,7 @@ const tasks = [
     url: 'https://cart.jd.com',
     title: '购物车降价提醒',
     description: "在购物车商品发生降价时提醒（将商品加入购物放几天京东有机会会定向降价）",
-    mode: 'iframe',
+    mode: 'tab',
     location: {
       host: ['cart.jd.com'],
       pathname: ['/']
@@ -130,6 +88,7 @@ const tasks = [
 
 // 根据登录状态选择任务模式
 let findTaskPlatform = function (task) {
+  if (!task || !Array.isArray(task.type)) return null
   let loginState = getLoginState()
 
   return task.type.find((platform) => loginState[platform].state == 'alive')
@@ -139,13 +98,33 @@ let getTask = function (taskId, currentPlatform) {
   let taskParameters = getSetting('task-parameters', [])
   let taskSettings = getSetting(`task-${taskId}:settings`, {})
   let parameters = (Array.isArray(taskParameters) && taskParameters.length > 0) ? taskParameters.find(t => t.id == taskId.toString()) : {}
+  let definedTask = tasks.find(t => t.id == taskId.toString())
+  if (!definedTask) {
+    return {
+      id: taskId ? taskId.toString() : null,
+      title: '未知任务',
+      unavailable: true,
+      suspended: true,
+      pause: true,
+      pause_description: '任务不存在或已移除'
+    }
+  }
   let task = Object.assign({}, {
     rateLimit: {
       weekly: 21,
       daily: 5,
       hour: 2
     }
-  }, tasks.find(t => t.id == taskId.toString()), parameters, taskSettings)
+  }, definedTask, parameters, taskSettings)
+  task.src = definedTask.src
+  task.mode = definedTask.mode
+  task.location = definedTask.location
+  task.type = definedTask.type
+  task.key = definedTask.key
+  task.checkin = definedTask.checkin || false
+  task.deprecated = definedTask.deprecated || false
+  if (definedTask.url) task.url = definedTask.url
+  else delete task.url
   let taskStatus = {}
   taskStatus.platform = findTaskPlatform(task);
   taskStatus.frequency = getSetting(`job${taskId}_frequency`, task.frequency)
@@ -156,7 +135,11 @@ let getTask = function (taskId, currentPlatform) {
   // 如果是签到任务，则读取签到状态
   if (task.checkin) {
     let checkinRecord = getSetting(`jjb_checkin_${task.key}`, null)
-    if (checkinRecord && checkinRecord.date == DateTime.local().toFormat("o")) {
+    let today = DateTime.local().toISODate()
+    if (checkinRecord && (
+      checkinRecord.date == today ||
+      checkinRecord.date == DateTime.local().toFormat("o")
+    )) {
       taskStatus.checked = true
       taskStatus.checkin_description = "完成于：" + readableTime(DateTime.fromISO(checkinRecord.time)) + (checkinRecord.value ? "，领到：" + checkinRecord.value : "");
     }

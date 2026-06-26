@@ -23,13 +23,53 @@ db.version(3).stores({
 
 async function findGood(orderId, good) {
   await db.orders.where('id').equals(orderId).modify(order => {
-    order.goods.push(good);
+    if (!order.goods) order.goods = [];
+
+    let hasGood = order.goods.some((item) => {
+      return item &&
+        item.sku == good.sku &&
+        item.name == good.name &&
+        Number(item.order_price) == Number(good.order_price) &&
+        Number(item.quantity || 1) == Number(good.quantity || 1)
+    });
+
+    if (!hasGood) {
+      order.goods.push(good);
+    }
   });
+}
+
+function uniqueGoods(goods) {
+  if (!goods || goods.length < 1) return []
+
+  return goods.reduce((result, good) => {
+    if (!good) return result
+
+    let key = [
+      good.sku || '',
+      good.name || '',
+      Number(good.order_price || 0),
+      Number(good.quantity || 1)
+    ].join('|')
+
+    if (!result.keys.includes(key)) {
+      result.keys.push(key)
+      result.goods.push(good)
+    }
+
+    return result
+  }, { keys: [], goods: [] }).goods
 }
 
 async function findOrder(orderId, data) {
   let order = await db.orders.where('id').equals(orderId).toArray();
-  if (order && order.length > 0) return await db.orders.update(orderId, data)
+  data.goods = uniqueGoods(data.goods)
+  if (order && order.length > 0) {
+    return await db.orders.where('id').equals(orderId).modify((order) => {
+      Object.assign(order, data)
+      order.goods = uniqueGoods(order.goods)
+    })
+  }
   let orderInfo = Object.assign(data, {
     id: orderId,
   })
@@ -40,7 +80,10 @@ async function updateOrders() {
   let orders = await db.orders.where('timestamp').above(Date.now() - 60*60*1000*24*45).reverse().sortBy('timestamp')
 
   if (orders && orders.length > 0) {
-    orders = orders.filter(order => order.goods && order.goods.length > 0);
+    orders = orders.map((order) => {
+      order.goods = uniqueGoods(order.goods)
+      return order
+    }).filter(order => order.goods && order.goods.length > 0);
   }
   saveSetting('jjb_orders', orders)
   chrome.runtime.sendMessage({
@@ -50,12 +93,15 @@ async function updateOrders() {
 }
 
 async function newMessage(messageId, data) {
-  let message = await db.messages.where('id').equals(messageId).toArray();
-  if (message && message.length > 0) return await db.messages.update(messageId, data)
+  let existingMessage = await db.messages.get(messageId)
   let messageInfo = Object.assign(data, {
     id: messageId,
   })
-  return await db.messages.add(messageInfo);
+  await db.messages.put(messageInfo);
+  return {
+    id: messageId,
+    created: !existingMessage
+  }
 }
 
 async function updateMessages() {
@@ -68,6 +114,18 @@ async function updateMessages() {
     messages: messages
   });
   return messages;
+}
+
+async function cleanupDeprecatedTaskData() {
+  const deprecatedTaskIds = new Set(['2', '5', '14', '15', '16', '22', '23'])
+  const deprecatedTypes = new Set(['coupon', 'couponReceived', 'goldCoinReceived', 'beanReceived'])
+  const deprecatedBatches = new Set(['baitiao', 'gcmall'])
+  await db.messages.filter(message => (
+    deprecatedTaskIds.has(String(message.taskId)) ||
+    deprecatedTypes.has(message.type) ||
+    deprecatedBatches.has(message.batch)
+  )).delete()
+  await db.taskLogs.filter(log => deprecatedTaskIds.has(String(log.taskId))).delete()
 }
 
 async function getTodayMessagesByTaskId(taskId) {
@@ -156,6 +214,7 @@ export {
   updateOrders,
   newMessage,
   updateMessages,
+  cleanupDeprecatedTaskData,
   addTaskLog,
   getTaskLog,
   findAndUpdateTaskResult,

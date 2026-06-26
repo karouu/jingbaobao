@@ -4,7 +4,6 @@
       <settings
         :login-state="loginState"
         @show-login="showLoginState = true"
-        @update-order-link="updateDisableOrderLink"
       ></settings>
       <div class="contents">
         <div class="weui-navbar">
@@ -182,12 +181,10 @@
                           </div>
                           <p v-if="good.sku">
                             <a
-                              v-if="!disableOrderLink"
                               :href="`https://item.jd.com/${good.sku}.html`"
                               target="_blank"
                               >{{ good.name }}</a
                             >
-                            <a v-else>{{ good.name }}</a>
                             <span class="count" v-if="good.quantity"
                               >&times; {{ good.quantity }}</span
                             >
@@ -255,7 +252,7 @@
                     <label
                       role="radio"
                       tabindex="-1"
-                      class="el-radio-button el-radio-button--mini is-active"
+                      :class="`el-radio-button el-radio-button--mini ${selectedTab == 'checkin_notice' ? 'is-active' : ''}`"
                     >
                       <input
                         type="radio"
@@ -270,7 +267,7 @@
                       role="radio"
                       aria-disabled="true"
                       tabindex="-1"
-                      class="el-radio-button el-radio-button--mini"
+                      :class="`el-radio-button el-radio-button--mini ${selectedTab == 'priceProtectionNotice' ? 'is-active' : ''}`"
                     >
                       <input
                         type="radio"
@@ -281,34 +278,13 @@
                       />
                       <span class="el-radio-button__inner">价保记录</span>
                     </label>
-                    <label
-                      role="radio"
-                      aria-disabled="true"
-                      tabindex="-1"
-                      class="el-radio-button el-radio-button--mini"
-                    >
-                      <input
-                        type="radio"
-                        v-model="selectedTab"
-                        tabindex="-1"
-                        class="el-radio-button__orig-radio"
-                        value="coupon"
-                      />
-                      <div class="el-radio-button__inner">领券记录</div>
-                    </label>
                   </div>
                 </div>
               </div>
-              <div class="message-items" v-if="messages && messages.length > 0">
-                <li v-for="(message, index) in messages" :key="index">
+              <div class="message-items" v-if="filteredMessages && filteredMessages.length > 0">
+                <li v-for="(message, index) in filteredMessages" :key="index">
                   <div
-                    :class="`weui-panel__bd message-item type-${message.type}`"
-                    v-show="
-                      !selectedTab ||
-                        selectedTab == message.type ||
-                        (selectedTab == 'priceProtectionNotice' &&
-                          message.type == 'notice')
-                    "
+                    :class="`weui-panel__bd message-item type-${message.type} status-${message.status || 'success'}`"
                   >
                     <div class="weui-media-box weui-media-box_text">
                       <h4 class="weui-media-box__title message">
@@ -319,27 +295,7 @@
                         ></i>
                         {{ message.title }}
                       </h4>
-                      <div class="coupon-box" v-if="message.coupon">
-                        <p>
-                          <span class="price">{{message.coupon.price}}</span>
-                        </p>
-                        <a
-                          v-if="message.coupon.batch == 'baitiao'"
-                          href="https://vip.jr.jd.com/coupon/myCoupons?default=IOU"
-                          target="_blank"
-                        >{{message.coupon.name}}</a>
-                        <a
-                          v-else-if="message.coupon.batch"
-                          :href="`https://search.jd.com/Search?coupon_batch=${message.coupon.batch}`"
-                          target="_blank"
-                        >{{message.coupon.name}}</a>
-                        <a
-                          v-else
-                          href="#"
-                          target="_blank"
-                        >{{message.coupon.name}}</a>
-                      </div>
-                      <div class="product-box" v-else-if="message.content.priceCut">
+                      <div class="product-box" v-if="message.content.priceCut">
                         <div class="good_title">
                           <div class="good_img">
                             <img
@@ -352,11 +308,9 @@
                           </div>
                           <p v-if="message.content.product">
                             <a
-                              v-if="!disableOrderLink"
                               :href="`https://item.jd.com/${message.content.product.sku}.html`"
                               target="_blank"
                               >{{ message.content.product.name }}</a>
-                            <a v-else>{{ message.content.product.name }}</a>
                           </p>
                         </div>
                         <p>
@@ -378,7 +332,10 @@
                   </div>
                 </li>
               </div>
-              <div class="no_message" v-else>暂时还没有未读消息</div>
+              <div class="no_message empty-state" v-else>
+                <strong>{{ emptyMessageText }}</strong>
+                <span>{{ emptyMessageHint }}</span>
+              </div>
             </div>
 
           </div>
@@ -502,6 +459,31 @@ import guide from "./guide.vue";
 import popup from "./popup.vue";
 import weDialog from "./we-dialog.vue";
 
+function uniqueGoods(goods) {
+  if (!goods || goods.length < 1) return [];
+
+  return goods.reduce(
+    function(result, good) {
+      if (!good) return result;
+
+      let key = [
+        good.sku || "",
+        good.name || "",
+        Number(good.order_price || 0),
+        Number(good.quantity || 1),
+      ].join("|");
+
+      if (result.keys.indexOf(key) < 0) {
+        result.keys.push(key);
+        result.goods.push(good);
+      }
+
+      return result;
+    },
+    { keys: [], goods: [] }
+  ).goods;
+}
+
 export default {
   name: "App",
   directives: {
@@ -523,7 +505,6 @@ export default {
       showDialog: false,
       showLoginState: false,
       currentVersion: process.env.VERSION,
-      disableOrderLink: getSetting("disabled_link") == "checked" ? true : false,
       newChangelog:
         versionCompare(
           getSetting("changelog_version", "2.0"),
@@ -531,7 +512,7 @@ export default {
         ) < 0,
       hiddenOrderIds: getSetting("hiddenOrderIds", []),
       hiddenPromotionIds: getSetting("hiddenPromotionIds", []),
-      selectedTab: null,
+      selectedTab: "checkin_notice",
       contentType: "orders",
       newVersion: getSetting("newVersion", null),
       unreadCount: getSetting("unreadCount", null),
@@ -590,6 +571,37 @@ export default {
         return false;
       }
     },
+    filteredMessages: function() {
+      if (!this.messages || this.messages.length < 1) return [];
+      return this.messages.filter((message) => {
+        return (
+          !this.selectedTab ||
+          this.selectedTab == message.type ||
+          (this.selectedTab == "priceProtectionNotice" &&
+            message.type == "notice")
+        );
+      });
+    },
+    emptyMessageText: function() {
+      switch (this.selectedTab) {
+        case "checkin_notice":
+          return "暂时还没有签到记录";
+        case "priceProtectionNotice":
+          return "暂时还没有价保记录";
+        default:
+          return "暂时还没有通知记录";
+      }
+    },
+    emptyMessageHint: function() {
+      switch (this.selectedTab) {
+        case "checkin_notice":
+          return "登录状态有效时，签到任务会按设定自动运行，也可在任务设置中点击刷新立即执行";
+        case "priceProtectionNotice":
+          return "发现满足条件的价保机会后，处理结果会显示在这里";
+        default:
+          return "任务产生新结果后会自动同步到这里";
+      }
+    },
   },
   methods: {
     checkUpdate: async function() {
@@ -610,12 +622,6 @@ export default {
         default:
           break;
       }
-    },
-    updateDisableOrderLink: function() {
-      setTimeout(() => {
-        this.disableOrderLink =
-          getSetting("disabled_link") == "checked" ? true : false;
-      }, 1000);
     },
     readMessages: function() {
       this.unreadCount = 0;
@@ -657,10 +663,14 @@ export default {
           }
         });
       }
-      this.messages = messages.map(function(message) {
-        if (message.type == "coupon") {
-          message.coupon = message.content;
-        }
+      const removedTaskIds = ["2", "5", "14", "15", "16", "22", "23"];
+      const removedTypes = ["coupon", "couponReceived", "goldCoinReceived", "beanReceived"];
+      const removedBatches = ["baitiao", "gcmall"];
+      this.messages = messages.filter(function(message) {
+        return !removedTaskIds.includes(String(message.taskId)) &&
+          !removedTypes.includes(message.type) &&
+          !removedBatches.includes(message.batch);
+      }).map(function(message) {
         message.time = readableTime(
           message.timestamp
             ? DateTime.fromMillis(message.timestamp)
@@ -681,6 +691,7 @@ export default {
           order.displayTime = readableTime(
             DateTime.fromMillis(order.timestamp)
           );
+          order.goods = uniqueGoods(order.goods);
           order.goods = order.goods.map(function(good, index) {
             good.suspended =
               _.indexOf(
@@ -788,16 +799,20 @@ export default {
 .messages,
 .discounts {
   overflow: hidden;
+  height: 100%;
 }
 
 .contents-box.orders ul {
-  min-height: 510px;
+  height: 100%;
   overflow-y: auto;
+  padding-bottom: 10px;
 }
 .message-items {
-  margin-top: 45px;
-  min-height: 460px;
+  margin-top: 0;
+  height: calc(100% - 58px);
   overflow-y: auto;
+  padding: 10px 12px 12px;
+  box-sizing: border-box;
 }
 .order-good.suspended {
   opacity: 0.5;
@@ -809,15 +824,19 @@ export default {
 .messages-top{
   display: flex;
   justify-content: center;
-  border-bottom: 1px solid #ebeef5;
-  background: #fafafa;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-content);
+  padding: 10px 12px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .messages-header {
-  height: 32px;
-  padding-top: 6px;
-  position: fixed;
-  z-index: 10;
+  height: auto;
+  padding-top: 0;
+  position: static;
+  z-index: auto;
 }
 
 .el-radio-group {

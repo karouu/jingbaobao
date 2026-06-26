@@ -7,13 +7,9 @@
           @click="switchTab('frequency_settings')"
         >任务设置</div>
         <div
-          :class="`weui-navbar__item ${ activeTab == 'notice_settings' ? 'weui-bar__item_on' : ''}`"
-          @click="switchTab('notice_settings')"
-        >通知设置</div>
-        <div
-          :class="`weui-navbar__item ${ activeTab == 'other_settings' ? 'weui-bar__item_on' : ''}`"
-          @click="switchTab('other_settings')"
-        >高级设置</div>
+          :class="`weui-navbar__item ${ activeTab == 'preference_settings' ? 'weui-bar__item_on' : ''}`"
+          @click="switchTab('preference_settings')"
+        >偏好设置</div>
       </div>
       <div class="weui-tab__panel">
         <form
@@ -25,54 +21,12 @@
         >
           <div class="frequency_settings settings_box" v-show="activeTab == 'frequency_settings'">
             <div class="tasks">
-              <div class="task-type">
-                <div role="radiogroup" class="el-radio-group">
-                  <label
-                    role="radio"
-                    tabindex="-1"
-                    class="el-radio-button el-radio-button--mini is-active"
-                  >
-                    <input
-                      type="radio"
-                      v-model="taskType"
-                      tabindex="-1"
-                      class="el-radio-button__orig-radio"
-                      value="enabled"
-                    >
-                    <span class="el-radio-button__inner">自动运行</span>
-                  </label>
-                  <label
-                    role="radio"
-                    aria-disabled="true"
-                    tabindex="-1"
-                    class="el-radio-button el-radio-button--mini"
-                  >
-                    <input
-                      type="radio"
-                      v-model="taskType"
-                      tabindex="-1"
-                      class="el-radio-button__orig-radio"
-                      value="disabled"
-                    >
-                    <span class="el-radio-button__inner">暂未启用</span>
-                  </label>
-                  <label
-                    role="radio"
-                    aria-disabled="true"
-                    tabindex="-1"
-                    v-if="newTasks && newTasks.length > 0"
-                    class="el-radio-button el-radio-button--mini"
-                  >
-                    <input
-                      type="radio"
-                      v-model="taskType"
-                      tabindex="-1"
-                      class="el-radio-button__orig-radio"
-                      value="new"
-                    >
-                    <div class="el-radio-button__inner">新任务</div>
-                  </label>
+              <div class="task-list-header">
+                <div>
+                  <strong>可执行任务</strong>
+                  <span>当前仅保留价格保护、每日京豆签到、购物车降价提醒</span>
                 </div>
+                <em>{{ tasks.length }} 项</em>
               </div>
               <div class="task-list">
                 <div class="weui-cells weui-cells_form">
@@ -105,15 +59,17 @@
                           :title="task.checkin_description"
                           class="today weui-icon-success-circle"
                         ></i>
-                        <i
-                          v-show="!task.checked && !task.suspended && !task.new"
-                          @click="retryTask(task)"
-                          class="reload-icon"
-                          v-tippy
-                          :title="task.last_run_description"
-                        ></i>
                       </div>
-                      <div class="weui-cell__bd">
+                      <div class="weui-cell__bd task-controls">
+                        <button
+                          v-if="!task.new"
+                          type="button"
+                          class="task-run-button"
+                          :disabled="!canRunTask(task)"
+                          @click.stop="retryTask(task)"
+                          v-tippy
+                          :title="taskRunTitle(task)"
+                        >{{ runningTaskId == task.id ? '启动中' : '立即运行' }}</button>
                         <select
                           class="weui-select"
                           @change="taskFrequencyUpdate(task, $event)"
@@ -170,231 +126,199 @@
               </p>
             </div>
           </div>
-          <div class="notice_settings settings_box" v-show="activeTab == 'notice_settings'">
-            <div class="weui-cells weui-cells_form">
-              <div class="weui-cell weui-cell_switch">
-                <div class="weui-cell__bd">不再提示领券通知</div>
-                <div class="weui-cell__ft">
-                  <input
-                    class="weui-switch"
-                    v-model="settings['mute_coupon']"
-                    type="checkbox"
-                    true-value="checked"
-                    false-value="false"
-                    @change="onSettingChange('mute_coupon', $event)"
-                  >
-                </div>
+          <div class="preference_settings settings_box" v-show="activeTab == 'preference_settings'">
+            <div class="settings-section">
+              <div class="settings-section__header">
+                <strong>通知提醒</strong>
+                <span>控制通知内容、提示音和免打扰策略</span>
               </div>
-              <div class="weui-cell weui-cell_switch">
-                <div class="weui-cell__bd"><span
-                    data-tippy-placement="top-start"
-                    class="tippy"
-                    data-tippy-content="不在价保的浏览器通知消息中包含商品名称等信息"
-                  >隐藏价保商品信息</span>
+              <div class="weui-cells weui-cells_form">
+                <div class="weui-cell weui-cell_switch">
+                  <div class="weui-cell__bd">
+                    <span>隐藏价保商品信息</span>
+                    <em>通知中不显示商品名称，降低旁人看到订单信息的风险</em>
+                  </div>
+                  <div class="weui-cell__ft">
+                    <input
+                      class="weui-switch"
+                      type="checkbox"
+                      true-value="checked"
+                      false-value="false"
+                      v-model="settings['hide_good']"
+                      @change="onSettingChange('hide_good', $event)"
+                    >
+                  </div>
                 </div>
-                <div class="weui-cell__ft">
-                  <input
-                    class="weui-switch"
-                    type="checkbox"
-                    true-value="checked"
-                    false-value="false"
-                    v-model="settings['hide_good']"
-                    @change="onSettingChange('hide_good', $event)"
-                  >
+                <div class="weui-cell weui-cell_switch">
+                  <div class="weui-cell__bd">
+                    <span>开启夜晚防打扰</span>
+                    <em>晚上 12 点至凌晨 6 点不发送浏览器通知</em>
+                  </div>
+                  <div class="weui-cell__ft">
+                    <input
+                      class="weui-switch"
+                      type="checkbox"
+                      true-value="checked"
+                      false-value="false"
+                      v-model="settings['mute_night']"
+                      name="mute_night"
+                      @change="onSettingChange('mute_night', $event)"
+                    >
+                  </div>
                 </div>
-              </div>
-              <div class="weui-cell weui-cell_switch">
-                <div class="weui-cell__bd">
-                  <span
-                    data-tippy-placement="top-start"
-                    class="tippy"
-                    data-tippy-content="开启后不再晚上12点至凌晨6点发送浏览器通知"
-                  >开启夜晚防打扰</span>
+                <div class="weui-cell weui-cell_switch">
+                  <div class="weui-cell__bd">
+                    <span>
+                      播放提示音效
+                      <i
+                        id="listen"
+                        @click="listenAudio = true"
+                        class="weui-icon-info-circle tippy"
+                        data-tippy-content="试听全部提示音效"
+                      ></i>
+                    </span>
+                    <em>价保、签到等通知出现时播放对应音效</em>
+                  </div>
+                  <div class="weui-cell__ft">
+                    <input
+                      class="weui-switch"
+                      type="checkbox"
+                      true-value="checked"
+                      false-value="false"
+                      v-model="settings['play_audio']"
+                      name="play_audio"
+                      @change="onSettingChange('play_audio', $event)"
+                    >
+                  </div>
                 </div>
-                <div class="weui-cell__ft">
-                  <input
-                    class="weui-switch"
-                    type="checkbox"
-                    true-value="checked"
-                    false-value="false"
-                    v-model="settings['mute_night']"
-                    name="mute_night"
-                    @change="onSettingChange('mute_night', $event)"
-                  >
-                </div>
-              </div>
-              <div class="weui-cell weui-cell_switch">
-                <div class="weui-cell__bd">
-                  <span>
-                    播放提示音效
-                    <i
-                      id="listen"
-                      @click="listenAudio = true"
-                      class="weui-icon-info-circle tippy"
-                      data-tippy-content="试听全部提示音效"
-                    ></i>
-                  </span>
-                </div>
-                <div class="weui-cell__ft">
-                  <input
-                    class="weui-switch"
-                    type="checkbox"
-                    true-value="checked"
-                    false-value="false"
-                    v-model="settings['play_audio']"
-                    name="play_audio"
-                    @change="onSettingChange('play_audio', $event)"
-                  >
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="other_settings settings_box" v-show="activeTab == 'other_settings'">
-            <div class="weui-cells weui-cells_form">
-              <div class="weui-cell weui-cell_select weui-cell_select-after">
-                <div class="weui-cell__bd">
-                  <span
-                    data-tippy-placement="top-start"
-                    class="tippy"
-                    data-tippy-content="商品降价小于“最小价差”时将不会自动申请价保"
-                  >最小价差</span>
-                </div>
-                <div class="weui-cell__bd">
-                  <select
-                    class="weui-select"
-                    name="price_pro_min"
-                    v-model="settings['price_pro_min']"
-                    @change="onSettingChange('price_pro_min', $event)"
-                  >
-                    <option :value="0.1">0.1元</option>
-                    <option :value="0.5">0.5元</option>
-                    <option :value="1">1元</option>
-                    <option :value="5">5元</option>
-                  </select>
-                </div>
-              </div>
-              <div class="weui-cell weui-cell_select weui-cell_select-after">
-                <div class="weui-cell__bd">
-                  <span
-                    data-tippy-placement="top-start"
-                    class="tippy"
-                    data-tippy-content="京东生鲜类价格保护时默认提供“生鲜品类券”，可手动修改为“原返”，设置本选项后京价保将为您自动选择"
-                  >生鲜价保模式</span>
-                </div>
-                <div class="weui-cell__bd">
-                  <select
-                    class="weui-select"
-                    name="refund_type"
-                    v-model="settings['refund_type']"
-                    @change="onSettingChange('refund_type', $event)"
-                  >
-                    <option value="1">原返</option>
-                    <option value="2">限生鲜品类京券</option>
-                  </select>
-                </div>
-              </div>
-              <div class="weui-cell weui-cell_switch">
-                <div class="weui-cell__bd">
-                  <span
-                    data-tippy-placement="top-start"
-                    class="tippy"
-                    data-tippy-content="如果您是Plus会员，在价保时会选择使用Plus价格来做对比"
-                  >我是Plus会员</span>
-                </div>
-                <div class="weui-cell__ft">
-                  <input
-                    class="weui-switch"
-                    type="checkbox"
-                    true-value="checked"
-                    false-value="false"
-                    name="is_plus"
-                    v-model="settings['is_plus']"
-                    @change="onSettingChange('is_plus', $event)"
-                  >
-                </div>
-              </div>
-              <div class="weui-cell weui-cell_switch">
-                <div class="weui-cell__bd">
-                  <span
-                    data-tippy-placement="top-start"
-                    class="tippy"
-                    data-tippy-content="开启剁手保护模式后，每次购物时京价保将向你发起灵魂质问，帮你极致省钱"
-                  >剁手保护模式</span>
-                </div>
-                <div class="weui-cell__ft">
-                  <input
-                    class="weui-switch"
-                    type="checkbox"
-                    true-value="checked"
-                    false-value="false"
-                    name="hand_protection"
-                    v-model="settings['hand_protection']"
-                    @change="onSettingChange('hand_protection', $event)"
-                  >
-                </div>
-              </div>
-              <div class="weui-cell weui-cell_switch">
-                <div class="weui-cell__bd">
-                  <span
-                    data-tippy-placement="top-start"
-                    class="tippy"
-                    data-tippy-content="开启本选项后，发现商品降价有价保机会时，京价保只会发送浏览器提醒，而不会自动提交价保申请（不推荐开启此选项）"
-                  >被动价保模式</span>
-                </div>
-                <div class="weui-cell__ft">
-                  <input
-                    class="weui-switch"
-                    type="checkbox"
-                    true-value="checked"
-                    false-value="false"
-                    name="prompt_only"
-                    v-model="settings['prompt_only']"
-                    @change="onSettingChange('prompt_only', $event)"
-                  >
-                </div>
-              </div>
-              <div class="weui-cell weui-cell_switch">
-                <div class="weui-cell__bd">
-                  <span
-                    v-tippy
-                    title="在右侧“最近订单”中京价保提供的商品链接包含了京东联盟的跳转，它不会影响你，却能给开发者提供一些收入，帮助京价保保持更新。"
-                  >停用最近订单的链接</span>
-                </div>
-                <div class="weui-cell__ft">
-                  <input
-                    class="weui-switch"
-                    type="checkbox"
-                    true-value="checked"
-                    false-value="false"
-                    @change="onSettingChange('disabled_link', $event)"
-                    v-model="settings['disabled_link']"
-                    name="disabled_link"
-                  >
-                </div>
-              </div>
-              <div class="weui-cell weui-cell_switch">
-                <div class="weui-cell__bd">
-                  <span
-                    data-tippy-placement="top-start"
-                    class="tippy"
-                    data-tippy-content="停用价格走势功能将停止上报京价保在本地获取到的商品价格同时停止展示价格走势图"
-                  >停用价格走势图</span>
-                </div>
-                <div class="weui-cell__ft">
-                  <input
-                    class="weui-switch"
-                    type="checkbox"
-                    true-value="checked"
-                    false-value="false"
-                    name="disable_pricechart"
-                    v-model="settings['disable_pricechart']"
-                    @change="onSettingChange('disable_pricechart', $event)"
-                  >
+                <div class="weui-cell weui-cell_switch">
+                  <div class="weui-cell__bd">
+                    <span>签到成功静默</span>
+                    <em>签到成功只写入记录，失败时仍通知</em>
+                  </div>
+                  <div class="weui-cell__ft">
+                    <input
+                      class="weui-switch"
+                      type="checkbox"
+                      true-value="checked"
+                      false-value="false"
+                      v-model="settings['mute_checkin']"
+                      name="mute_checkin"
+                      @change="onSettingChange('mute_checkin', $event)"
+                    >
+                  </div>
                 </div>
               </div>
             </div>
-            <div class="other_actions">
-              <p style="text-align: center;">
+            <div class="settings-section">
+              <div class="settings-section__header">
+                <strong>价保行为</strong>
+                <span>控制自动价保的判断阈值和申请方式</span>
+              </div>
+              <div class="weui-cells weui-cells_form">
+                <div class="weui-cell weui-cell_select weui-cell_select-after">
+                  <div class="weui-cell__bd">
+                    <span>最小价差</span>
+                    <em>降价小于该金额时不自动申请价保</em>
+                  </div>
+                  <div class="weui-cell__bd">
+                    <select
+                      class="weui-select"
+                      name="price_pro_min"
+                      v-model="settings['price_pro_min']"
+                      @change="onSettingChange('price_pro_min', $event)"
+                    >
+                      <option :value="0.1">0.1元</option>
+                      <option :value="0.5">0.5元</option>
+                      <option :value="1">1元</option>
+                      <option :value="5">5元</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="weui-cell weui-cell_select weui-cell_select-after">
+                  <div class="weui-cell__bd">
+                    <span>生鲜价保模式</span>
+                    <em>生鲜价保时自动选择原返或生鲜品类券</em>
+                  </div>
+                  <div class="weui-cell__bd">
+                    <select
+                      class="weui-select"
+                      name="refund_type"
+                      v-model="settings['refund_type']"
+                      @change="onSettingChange('refund_type', $event)"
+                    >
+                      <option value="1">原返</option>
+                      <option value="2">限生鲜品类京券</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="weui-cell weui-cell_switch">
+                  <div class="weui-cell__bd">
+                    <span>我是 Plus 会员</span>
+                    <em>价保对比时优先按 Plus 会员价判断</em>
+                  </div>
+                  <div class="weui-cell__ft">
+                    <input
+                      class="weui-switch"
+                      type="checkbox"
+                      true-value="checked"
+                      false-value="false"
+                      name="is_plus"
+                      v-model="settings['is_plus']"
+                      @change="onSettingChange('is_plus', $event)"
+                    >
+                  </div>
+                </div>
+                <div class="weui-cell weui-cell_switch">
+                  <div class="weui-cell__bd">
+                    <span>被动价保模式</span>
+                    <em>发现价保机会时只提醒，不自动提交申请</em>
+                  </div>
+                  <div class="weui-cell__ft">
+                    <input
+                      class="weui-switch"
+                      type="checkbox"
+                      true-value="checked"
+                      false-value="false"
+                      name="prompt_only"
+                      v-model="settings['prompt_only']"
+                      @change="onSettingChange('prompt_only', $event)"
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="settings-section">
+              <div class="settings-section__header">
+                <strong>页面与隐私</strong>
+                <span>控制价格走势图等页面行为</span>
+              </div>
+              <div class="weui-cells weui-cells_form">
+                <div class="weui-cell weui-cell_switch">
+                  <div class="weui-cell__bd">
+                    <span>停用价格走势图</span>
+                    <em>停止展示价格走势，并停止上报本地获取的商品价格</em>
+                  </div>
+                  <div class="weui-cell__ft">
+                    <input
+                      class="weui-switch"
+                      type="checkbox"
+                      true-value="checked"
+                      false-value="false"
+                      name="disable_pricechart"
+                      v-model="settings['disable_pricechart']"
+                      @change="onSettingChange('disable_pricechart', $event)"
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="settings-section">
+              <div class="settings-section__header">
+                <strong>数据维护</strong>
+                <span>管理本地账号、密码和运行状态</span>
+              </div>
+              <div class="other_actions">
                 <a
                   href="#"
                   id="clearAccount"
@@ -403,7 +327,7 @@
                   data-tippy-placement="top-start"
                   data-tippy-content="在登录时勾选记住密码可保存新的密码"
                 >清除账号密码和记录</a>
-              </p>
+              </div>
             </div>
             <p class="text-tips version">当前版本：{{currentVersion}}</p>
           </div>
@@ -495,11 +419,8 @@ const settingKeys = [
   "play_audio",
   "mute_night",
   "hide_good",
-  "mute_coupon",
   "disable_pricechart",
-  "disabled_link",
   "prompt_only",
-  "hand_protection",
   "is_plus",
   "refund_type",
   "price_pro_min"
@@ -516,18 +437,15 @@ export default {
       scienceOnline: false,
       listenAudio: false,
       activeTab: "frequency_settings",
-      taskType: "enabled",
       currentSettingTask: null,
+      runningTaskId: null,
       taskList: [],
       hover: null,
       settings: {
         disable_pricechart: false,
-        disabled_link: false,
-        hand_protection: false,
         hide_good: false,
         is_plus: false,
         mute_checkin: false,
-        mute_coupon: false,
         mute_night: true,
         play_audio: false,
         price_pro_min: 0.5,
@@ -543,7 +461,7 @@ export default {
     this.getTaskList();
     this.changeTips();
     settingKeys.map(settingKey => {
-      this.settings[settingKey] = getSetting(settingKey);
+      this.settings[settingKey] = getSetting(settingKey, this.settings[settingKey]);
     });
     // 测试是否科学上网
     setTimeout(() => {
@@ -556,26 +474,8 @@ export default {
     }
   },
   computed: {
-    newTasks: function() {
-      return this.taskList.filter(task => task.new);
-    },
     tasks: function() {
-      switch (this.taskType) {
-        case "enabled":
-          return this.taskList.filter(
-            task => task.frequency != "never" && !task.new
-          );
-          break;
-        case "disabled":
-          return this.taskList.filter(task => task.frequency == "never");
-          break;
-        case "new":
-          return this.taskList.filter(task => task.new);
-          break;
-        default:
-          return this.taskList;
-          break;
-      }
+      return this.taskList.filter(task => !task.new);
     }
   },
   methods: {
@@ -591,7 +491,6 @@ export default {
     onSettingChange: function(settingKey, event) {
       console.log("onSettingChange", settingKey, event.target.value, event);
       let notice = null;
-      let updateCallback = null;
       let value = event.target.value
       switch (settingKey) {
         case "disable_pricechart":
@@ -601,11 +500,6 @@ export default {
         case "prompt_only":
           notice =
             "开启本选项后，发现商品降价有价保机会时，京价保只会发送浏览器提醒，而不会自动提交价保申请";
-          break;
-        case "disabled_link":
-          notice =
-            "京价保展示的最近订单商品链接带有京东联盟的返利，使用该链接购买能给开发者提供一些收入，帮助京价保保持更新。确认要停用该链接吗？";
-          updateCallback = this.updateDisableOrderLink;
           break;
         default:
           break;
@@ -628,7 +522,6 @@ export default {
           })
           .then(async val => {
             saveSetting(settingKey, value);
-            if (updateCallback) updateCallback();
           })
           .catch(() => {
             setTimeout(() => {
@@ -715,14 +608,27 @@ export default {
     showLogin: function() {
       this.$emit("show-login");
     },
-    updateDisableOrderLink: function() {
-      this.$emit("update-order-link");
-    },
     // 任务列表
     getTaskList: async function() {
       this.taskList = getTasks();
     },
+    canRunTask: function(task) {
+      return task &&
+        !task.unavailable &&
+        !task.deprecated &&
+        !task.new &&
+        !this.runningTaskId;
+    },
+    taskRunTitle: function(task) {
+      if (!task) return "";
+      if (this.runningTaskId == task.id) return "任务正在启动";
+      if (task.unavailable || task.deprecated) return "任务不可用";
+      if (task.pause) return `${task.pause_description || "任务已达到频率限制"}，手动运行会立即强制执行`;
+      return `${task.last_run_description}，点击立即运行`;
+    },
     retryTask: function(task, hideNotice = false) {
+      if (!this.canRunTask(task)) return;
+      this.runningTaskId = task.id;
       chrome.runtime.sendMessage(
         {
           action: "runTask",
@@ -730,13 +636,14 @@ export default {
           taskId: task.id
         },
         response => {
+          this.runningTaskId = null;
           if (!hideNotice) {
-            if (response.result == "success") {
+            if (response && response.result == "success") {
               this.$toast.show({
-                text: "手动运行成功",
+                text: "任务已启动",
                 time: "3000"
               });
-            } else if (response.result == "pause") {
+            } else if (response && response.result == "pause") {
               this.$toast.show({
                 text: "任务已暂停运行",
                 message: response.message,
@@ -745,7 +652,7 @@ export default {
             } else {
               this.$toast.show({
                 text: "任务暂未运行",
-                message: response.message,
+                message: response && response.message,
                 time: "3000"
               });
             }
@@ -764,9 +671,6 @@ export default {
       setTimeout(() => {
         this.getTaskList();
       }, 250);
-      setTimeout(() => {
-        this.taskType = "enabled";
-      }, 500);
     }
   }
 };
@@ -776,23 +680,54 @@ export default {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  height: calc(100vh * var(--zoom-factor) - 92px);
+  justify-content: flex-start;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+.settings .weui-tab__panel,
+.settings form {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.frequency_settings .tasks {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
 }
 
 .settings .page__desc {
   font-size: 12px;
-  height: 40px;
+  min-height: 38px;
+  height: auto;
   line-height: 18px;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .frequency_settings .weui-select {
-  width: 9em;
+  width: 112px;
+  height: 42px;
+  padding: 0 30px 0 12px;
+  border-radius: 12px;
+  background-color: var(--bg-light);
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
 }
 .settings .task-list {
-  margin-top: 5px;
+  margin: 12px 10px 0;
   overflow-y: auto;
+  min-height: 0;
+  border: 1px solid var(--border-color);
+  border-radius: var(--card-radius);
+  background: var(--bg-white);
+  flex: 1;
 }
 
 .task-item {
@@ -812,12 +747,23 @@ export default {
   transform-origin: 0 0;
   -webkit-transform: scaleY(0.5);
   transform: scaleY(0.5);
-  left: 15px;
+  left: 12px;
   z-index: 2;
 }
 
 .settings .task-list .weui-cells {
   margin-top: 0;
+  background: transparent;
+}
+
+.settings .task-list .weui-cell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 72px;
+  padding: 12px 14px;
+  box-sizing: border-box;
 }
 
 .enabled-task {
@@ -834,16 +780,180 @@ export default {
   cursor: pointer;
 }
 
-.other_settings .other_actions {
-  height: 140px;
-}
-
 .frequency_settings .weui-cell_select .weui-cell__bd:after {
-  right: 60px;
+  display: none;
 }
 
-.task-type {
-  margin-top: 6px;
+.task-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 12px 10px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--card-radius);
+  background: var(--bg-white);
+  color: var(--text-primary);
+}
+
+.task-list-header strong {
+  display: block;
+  font-size: 18px;
+  line-height: 24px;
+}
+
+.task-list-header span {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.task-list-header em {
+  flex-shrink: 0;
+  min-width: 48px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--accent-settings);
+  color: #fff;
+  font-style: normal;
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 30px;
   text-align: center;
+}
+
+.task-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
+}
+
+.task-run-button {
+  min-width: 72px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--accent-settings);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--accent-settings);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 34px;
+  white-space: nowrap;
+}
+
+.task-run-button:hover:not(:disabled) {
+  background: var(--accent-settings);
+  color: #fff;
+}
+
+.task-run-button:disabled {
+  border-color: var(--border-light);
+  color: var(--text-tertiary);
+  cursor: not-allowed;
+}
+
+.frequency_settings .bottom-tips {
+  flex-shrink: 0;
+  margin-top: 8px;
+}
+
+.preference_settings.settings_box {
+  overflow-y: auto;
+  padding: 12px 10px 18px;
+  gap: 12px;
+}
+
+.settings-section {
+  flex-shrink: 0;
+}
+
+.settings-section__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 2px 8px;
+}
+
+.settings-section__header strong {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.settings-section__header span {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: right;
+}
+
+.preference_settings .weui-cells {
+  margin: 0;
+  border: 1px solid var(--border-color);
+  border-radius: var(--card-radius);
+  overflow: hidden;
+  background: var(--bg-white);
+  flex-shrink: 0;
+}
+
+.preference_settings .weui-cell {
+  min-height: 64px;
+  padding: 12px 16px;
+  box-sizing: border-box;
+}
+
+.preference_settings .weui-cell__bd:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.preference_settings .weui-cell__bd span {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.preference_settings .weui-cell__bd em {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.4;
+}
+
+.preference_settings .weui-cell_select .weui-cell__bd:last-child {
+  flex: 0 0 150px;
+}
+
+.preference_settings .weui-select {
+  width: 100%;
+  height: 40px;
+  padding: 0 28px 0 12px;
+  border-radius: 12px;
+  background-color: var(--bg-light);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.preference_settings .other_actions {
+  display: flex;
+  justify-content: center;
+  padding: 14px 0 4px;
+}
+
+.preference_settings .version {
+  padding: 12px 0;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
 }
 </style>
