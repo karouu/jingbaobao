@@ -44,6 +44,9 @@ body {
     --link-color: #0b85c3;
     --link-hover: #006da5;
     --shadow: rgba(0, 0, 0, 0.1);
+    --accent-settings: #1e9be0;
+    --accent-orders: #f5a400;
+    --card-radius: 12px;
 }
 
 /* Dark mode colors */
@@ -66,6 +69,8 @@ body {
         --link-color: #4a9eff;
         --link-hover: #6db3ff;
         --shadow: rgba(0, 0, 0, 0.3);
+        --accent-settings: #2499d6;
+        --accent-orders: #e59a00;
     }
 }
 
@@ -74,10 +79,12 @@ body::-webkit-scrollbar {
 }
 
 .popup {
+    height: 100vh;
     min-height: 600px;
     min-width: 800px;
     overflow: hidden;
     background: var(--bg-primary);
+    color: var(--text-primary);
 }
 
 .main-app {
@@ -85,6 +92,7 @@ body::-webkit-scrollbar {
     justify-content: space-between;
     width: calc(100vw * var(--zoom-factor));
     min-width: 400px;
+    height: calc(100vh * var(--zoom-factor));
 }
 
 .weui-cell_select {
@@ -127,16 +135,23 @@ body::-webkit-scrollbar {
 }
 
 .settings {
+    width: 365px;
     min-width: 365px;
     background: var(--bg-secondary);
     border-right: 1px solid var(--border-color);
     overflow: hidden;
     position: relative;
+    display: flex;
+    flex-direction: column;
 }
 
 .settings .weui-tab {
     height: auto;
+    flex: 1;
+    min-height: 0;
     max-width: 365px;
+    display: flex;
+    flex-direction: column;
 }
 
 .weui-navbar {
@@ -144,20 +159,20 @@ body::-webkit-scrollbar {
 }
 
 .settings .weui-navbar__item.weui-bar__item_on {
-    background-image: linear-gradient(180deg, #03A9F4, rgba(3, 169, 244, 0.52));
+    background: linear-gradient(180deg, var(--accent-settings), #1484c5);
     color: #fff;
 }
 
 .settings .weui-cell_switch {
-    height: 32px;
-    font-size: 15px;
-    padding-top: 4px;
-    padding-bottom: 4px;
+    min-height: 44px;
+    height: auto;
+    font-size: 14px;
+    padding: 8px 14px;
 }
 
 .contents {
     min-width: 432px;
-    min-height: 600px;
+    min-height: 0;
     flex-grow: 1;
     overflow: hidden;
     background: var(--bg-content);
@@ -167,7 +182,7 @@ body::-webkit-scrollbar {
 }
 
 .contents .weui-navbar__item.weui-bar__item_on {
-    background-image: linear-gradient(180deg, #e6ad00, #FF9800);
+    background: linear-gradient(180deg, var(--accent-orders), #f08a00);
     color: #fff;
 }
 
@@ -179,6 +194,7 @@ body::-webkit-scrollbar {
     flex: 1;
     display: flex;
     flex-direction: column;
+    min-height: 0;
 }
 
 .weui-cell_switch {
@@ -211,17 +227,40 @@ body::-webkit-scrollbar {
 
 .no_order,
 .no_message {
-    background: url(../image/empty.svg) no-repeat center 10px;
-    padding: 5em 0em;
+    background: url(../image/empty.svg) no-repeat center 0;
+    background-size: 56px 56px;
+    padding: 74px 20px 0;
     text-align: center;
-    color: #ccc;
-    margin-top: 10em;
+    color: var(--text-secondary);
+    margin: 0;
+    min-height: 260px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.empty-state {
+    flex-direction: column;
+    gap: 8px;
+    line-height: 1.6;
+}
+
+.empty-state strong {
+    color: var(--text-primary);
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.empty-state span {
+    max-width: 360px;
+    color: var(--text-tertiary);
+    font-size: 12px;
 }
 
 .bottom-tips {
-    padding: 10px;
-    padding-bottom: 15px;
-    background: var(--border-color);
+    padding: 10px 14px 12px;
+    background: var(--bg-tertiary);
+    border-top: 1px solid var(--border-color);
     margin-top: 10px;
 }
 
@@ -407,13 +446,12 @@ body::-webkit-scrollbar {
 }
 
 .order_time {
-    margin-top: .77em;
-    margin-bottom: .3em;
-    padding-left: 15px;
-    padding-right: 15px;
-    color: #999;
+    margin: 0;
+    padding: 10px 16px 7px;
+    color: var(--text-secondary);
     font-size: 12px;
-    padding-top: 5px;
+    background: var(--bg-tertiary);
+    border-top: 1px solid var(--border-color);
 }
 
 #orders .weui-cell:before,
@@ -777,8 +815,11 @@ a.buy-btn:hover {
 }
 
 .popup .weui-tab__panel {
-    height: calc(100vh * var(--zoom-factor) - 91px);
+    height: auto;
+    flex: 1;
+    min-height: 0;
     padding-bottom: 0;
+    overflow: hidden;
 }
 
 .popup .weui-navbar+.weui-tab__panel {
@@ -790,8 +831,11 @@ a.buy-btn:hover {
 }
 
 .popup .weui-navbar__item {
-    padding: 7px 0;
+    padding: 10px 0;
     cursor: pointer;
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text-secondary);
 }
 
 .recommendedLink p {
@@ -818,18 +862,20 @@ a.buy-btn:hover {
 }
 
 .bottom {
-    height: 55px;
+    height: 60px;
     font-size: 12px;
     display: flex;
     width: 100%;
     justify-content: space-between;
     align-items: center;
-    background: #f7f7fa;
+    background: var(--bg-tertiary);
+    border-top: 1px solid var(--border-color);
+    flex-shrink: 0;
 }
 
 img.weui-tabbar__icon {
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
     cursor: pointer;
 }
 
@@ -935,13 +981,6 @@ img.weui-tabbar__icon {
     mask-size: 20px;
 }
 
-.messages-tab span.coupon {
-    -webkit-mask: url(../image/coupon.svg) no-repeat center;
-    mask: url(../image/coupon.svg) no-repeat center;
-    -webkit-mask-size: 22px;
-    mask-size: 22px;
-}
-
 .messages-tab span.checkin {
     -webkit-mask: url(../image/checkin.svg) no-repeat center;
     mask: url(../image/checkin.svg) no-repeat center;
@@ -987,29 +1026,13 @@ button.Button.messages-tab.Button--plain:focus {
     padding-right: 5px;
 }
 
-.message .coupon {
-    background: url(../image/coupon.png) no-repeat;
-    width: 20px;
-    height: 20px;
-    background-size: 20px;
-    display: inline-block;
-    margin-bottom: -3px;
-}
-
-.message .checkin_notice,
-.message .goldCoinReceived,
-.beanReceived {
+.message .checkin_notice {
     background: url(../image/bean.png) no-repeat;
     width: 20px;
     height: 20px;
     background-size: 20px;
     display: inline-block;
     margin-bottom: -3px;
-}
-
-.message .checkin_notice.coin,
-.message .goldCoinReceived.goldCoin {
-    background-image: url(../image/coin.png);
 }
 
 .messages .price-cut {
@@ -1048,30 +1071,6 @@ button.Button.messages-tab.Button--plain:focus {
     background-size: 20px;
     display: inline-block;
     margin-bottom: -3px;
-}
-
-.coupon-box {
-    position: relative;
-    height: 50px;
-    border: 1px solid #f2f2f2;
-    background: #fff;
-    display: inline-block;
-    display: block;
-    padding: 10px;
-}
-
-.coupon-box .price {
-    padding: 1px 5px;
-    color: #f23030;
-    font-size: 15px;
-    background: #fff4ec;
-    display: inline-block;
-}
-
-.coupon-box a {
-    font-size: 14px;
-    color: #555;
-    padding: 4px;
 }
 
 .reward {
@@ -1210,8 +1209,7 @@ button.Button.messages-tab.Button--plain:focus {
     min-height: 60px;
     border-top: 1px solid var(--border-dark);
     background: var(--bg-tertiary);
-    position: sticky;
-    bottom: 0;
+    position: static;
     width: 100%;
     display: flex;
     justify-content: space-between;
@@ -1219,6 +1217,8 @@ button.Button.messages-tab.Button--plain:focus {
     padding: 0 8px;
     margin-top: auto;
     z-index: 10;
+    flex-shrink: 0;
+    box-sizing: border-box;
 }
 
 .bottom-box .avatar {
@@ -1588,4 +1588,123 @@ button.Button.messages-tab.Button--plain:focus {
     h6 {
         color: var(--text-primary);
     }
+}
+
+/* Popup visual polish */
+.popup .weui-navbar {
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.popup .weui-navbar__item:after {
+    border-right-color: var(--border-color);
+}
+
+.popup .weui-cell {
+    min-height: 44px;
+    box-sizing: border-box;
+}
+
+.popup .weui-select,
+.popup .weui-input {
+    min-height: 36px;
+    border-radius: 8px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    padding: 0 12px;
+}
+
+.popup .weui-switch {
+    transform: scale(0.82);
+    transform-origin: right center;
+}
+
+.messages .message-items li,
+.orders li {
+    background: var(--bg-white);
+    border: 1px solid var(--border-color);
+    border-radius: var(--card-radius);
+    margin: 10px 12px;
+    box-shadow: 0 2px 10px var(--shadow);
+}
+
+.messages .message-items li {
+    margin: 0 0 10px;
+}
+
+.message-item.status-failed {
+    border-left: 3px solid #e85d5d;
+}
+
+.message-item.status-failed .weui-media-box__title {
+    color: #c74444;
+}
+
+.message-items .weui-media-box {
+    padding: 12px 14px;
+    border-bottom: none;
+}
+
+.message-items .weui-media-box__title {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.message-items .weui-media-box__desc,
+.message-items .weui-media-box__info__meta {
+    color: var(--text-secondary);
+}
+
+.orders .weui-cell.good {
+    padding: 12px 14px;
+}
+
+.orders .order_price {
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+.messages-top .el-radio-button__inner {
+    min-width: 98px;
+    padding: 9px 20px;
+    background: var(--bg-white);
+    color: var(--text-secondary);
+    border-color: var(--border-light);
+    font-weight: 600;
+}
+
+.messages-top .is-active .el-radio-button__inner {
+    background: #409eff;
+    border-color: #409eff;
+    color: #fff;
+}
+
+.bottom {
+    height: 60px;
+    background: var(--bg-tertiary);
+    border-top: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.bottom .weui-tabbar__item {
+    color: var(--text-secondary);
+}
+
+.settings .weui-tab__panel {
+    background: var(--bg-primary);
+}
+
+.settings .weui-cell__bd:first-child {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.settings .weui-select {
+    border: 1px solid transparent;
+}
+
+.settings .weui-select:hover,
+.settings .weui-select:focus {
+    border-color: var(--accent-settings);
 }

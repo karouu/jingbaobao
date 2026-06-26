@@ -2,6 +2,37 @@ import 'weui';
 import weui from './shim/weui.js';
 import { Chart } from '@antv/g2';
 
+function guardRuntimeMessages() {
+  const runtime = chrome.runtime
+  if (runtime.sendMessage.__jjbGuarded) return
+  const sendMessage = runtime.sendMessage.bind(runtime)
+  try {
+    runtime.sendMessage = function (...args) {
+      if (!runtime.id) return
+      for (let index = args.length - 1; index >= 0; index -= 1) {
+        if (typeof args[index] !== 'function') continue
+        const callback = args[index]
+        args[index] = function (...callbackArgs) {
+          if (runtime.lastError) return
+          callback(...callbackArgs)
+        }
+        break
+      }
+      try {
+        const result = sendMessage(...args)
+        return result && typeof result.catch === 'function' ? result.catch(() => undefined) : result
+      } catch (error) {
+        if (!/Extension context invalidated/i.test(error.message || String(error))) throw error
+      }
+    }
+    runtime.sendMessage.__jjbGuarded = true
+  } catch (error) { }
+}
+
+guardRuntimeMessages()
+
+let currentSku = null;
+
 // 获取设置
 function getSetting(name, cb) {
   chrome.runtime.sendMessage({
@@ -171,7 +202,7 @@ function showError(sku, error) {
   console.error(error);
   $("#jjbPriceChart").html(`<div id="retry" class="no_data">查询失败，点击重试</div>`);
   $('#retry').on('click', () => {
-    getPriceChart(sku)
+    if (sku) getPriceChart(sku)
   })
 }
 
@@ -181,7 +212,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
   switch (message.type) {
     case 'priceChart':
       if (message.error) {
-        return showError(sku, error)
+        return showError(currentSku, message.error)
       }
       dealWithPriceDate(message.data)
       break;
@@ -200,11 +231,14 @@ getSetting('disable_pricechart', function (disable) {
       if (window.location.host == 're.jd.com') {
         urlInfo = /(https|http):\/\/re.jd.com\/cps\/item\/([0-9]*).html/g.exec(window.location.href);
       }
-      let sku = urlInfo[2]
-      getPriceChart(sku)
+      if (!urlInfo) {
+        return showError(null, `Cannot parse sku from ${window.location.href}`)
+      }
+      currentSku = urlInfo[2]
+      getPriceChart(currentSku)
 
       $('#ChartDays').on('change', function () {
-        getPriceChart(sku, $(this).val());
+        getPriceChart(currentSku, $(this).val());
       });
       $('#disablePriceChart').on('click', () => {
         weui.confirm('停用此功能后京价保将不再在商品页展示价格走势图，同时也将停止上报获取到的商品价格', function () {
@@ -227,5 +261,3 @@ getSetting('disable_pricechart', function (disable) {
     }, 1000)
   }
 });
-
-

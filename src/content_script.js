@@ -1,9 +1,37 @@
 // 京价保
 import 'weui';
 import weui from './shim/weui.js';
-import dialogPolyfill from 'dialog-polyfill'
 
 import '../static/style/content.css'
+
+function guardRuntimeMessages() {
+  const runtime = chrome.runtime
+  if (runtime.sendMessage.__jjbGuarded) return
+  const sendMessage = runtime.sendMessage.bind(runtime)
+  try {
+    runtime.sendMessage = function (...args) {
+      if (!runtime.id) return
+      for (let index = args.length - 1; index >= 0; index -= 1) {
+        if (typeof args[index] !== 'function') continue
+        const callback = args[index]
+        args[index] = function (...callbackArgs) {
+          if (runtime.lastError) return
+          callback(...callbackArgs)
+        }
+        break
+      }
+      try {
+        const result = sendMessage(...args)
+        return result && typeof result.catch === 'function' ? result.catch(() => undefined) : result
+      } catch (error) {
+        if (!/Extension context invalidated/i.test(error.message || String(error))) throw error
+      }
+    }
+    runtime.sendMessage.__jjbGuarded = true
+  } catch (error) { }
+}
+
+guardRuntimeMessages()
 
 var observeDOM = (function () {
   var MutationObserver = window.MutationObserver || window.WebKitMutationObserver
@@ -18,24 +46,6 @@ var observeDOM = (function () {
     obs.observe(obj, { childList: true, subtree: true });
   };
 })();
-
-function injectScript(file, node) {
-  var th = document.getElementsByTagName(node)[0];
-  var s = document.createElement('script');
-  s.setAttribute('type', 'text/javascript');
-  s.setAttribute('charset', "UTF-8");
-  s.setAttribute('src', file);
-  th.appendChild(s);
-}
-
-function injectScriptCode(code, node) {
-  var th = document.getElementsByTagName(node)[0];
-  var script = document.createElement('script');
-  script.setAttribute('type', 'text/javascript');
-  script.setAttribute('language', 'JavaScript');
-  script.textContent = code;
-  th.appendChild(script);
-}
 
 function mockClick(element) {
   var dispatchMouseEvent = function (target, var_args) {
@@ -126,24 +136,40 @@ function apply(applyBtn, priceInfo, setting) {
             });
           }
 
-          observeDOM(document.getElementById(resultId), function (observer) {
-            let resultText = $("#" + resultId).text()
-            if (resultText && resultText.indexOf("预计") < 0 && resultText.indexOf("繁忙") < 0) {
-              if (observer) observer.disconnect();
-              chrome.runtime.sendMessage({
-                action: "priceProtectionNotice",
-                title: "报告老板，价保申请有结果了",
-                task: {
-                  id: "1"
-                },
-                log: true,
-                batch: 'jiabao',
-                product_name: product_name,
-                content: "价保结果：" + resultText
-              }, function (response) {
-              });
+          let resultElement = document.getElementById(resultId)
+          if (resultElement) {
+            let reported = false
+            let reportApplyResult = function (observer) {
+              let resultText = $("#" + resultId).text()
+              if (!reported && resultText && resultText.indexOf("预计") < 0 && resultText.indexOf("繁忙") < 0) {
+                reported = true
+                if (observer) observer.disconnect()
+                chrome.runtime.sendMessage({
+                  action: "priceProtectionNotice",
+                  title: "报告老板，价保申请有结果了",
+                  task: { id: "1" },
+                  log: true,
+                  batch: 'jiabao',
+                  status: resultText.indexOf('成功') > -1 ? 'success' : 'failed',
+                  product_name: product_name,
+                  content: "价保结果：" + resultText
+                })
+              }
             }
-          });
+            observeDOM(resultElement, reportApplyResult)
+            reportApplyResult()
+          } else {
+            chrome.runtime.sendMessage({
+              action: 'priceProtectionNotice',
+              title: '价保申请状态未确认',
+              task: { id: '1' },
+              log: true,
+              batch: 'jiabao',
+              status: 'failed',
+              product_name: product_name,
+              content: '提交后未找到京东价保结果区域，请前往价保页面确认申请状态'
+            })
+          }
         }, 1500);
       }
     }
@@ -157,6 +183,7 @@ function seekPromInfo(platform) {
   let promotions = []
   if (platform == 'pc') {
     urlInfo = /(https|http):\/\/item.jd.com\/([0-9]*).html/g.exec(window.location.href);
+    if (!urlInfo) return
     sku = urlInfo[2]
 
     $(".prom-gift-list .prom-gift-item").each(function (index, giftDom) {
@@ -192,6 +219,7 @@ function seekPromInfo(platform) {
     })
   } else {
     urlInfo = /(https|http):\/\/(item.m.jd.com|mitem.jd.hk)\/product\/([0-9]*).html/g.exec(window.location.href);
+    if (!urlInfo) return
     sku = urlInfo[3]
     $(".mod_discount .detail_prom .prom_item").each(function (index, promDom) {
       let typeName, code, description, link
@@ -221,16 +249,17 @@ function seekPromInfo(platform) {
 
 // 提取价格信息
 function seekPriceInfo(platform) {
-  let urlInfo, sku, price, normal_price, presale_price, plus_price, pingou_price, spec_price, orgin_price, skuName
+  let urlInfo, sku, price, normal_price, presale_price, plus_price, pingou_price, spec_price, orgin_price, skuName, earnest_price
   // 顺便获取促销
   seekPromInfo(platform)
   if (platform == 'pc') {
     urlInfo = /(https|http):\/\/item.jd.com\/([0-9]*).html/g.exec(window.location.href);
+    if (!urlInfo) return null
     skuName = $(".sku-name").text() ? $(".sku-name").text().trim() : null
     sku = urlInfo[2]
     // 需要对预售定金进行区分
     if ($('span.p-price').length > 1) {
-      $('span.p-price').each(function (priceDom) {
+      $('span.p-price').each(function (index, priceDom) {
         if ($(priceDom).hasClass('J-earnest')) {
           earnest_price = $(priceDom).find('.price').text() ? $(priceDom).find('.price').text().replace(/[^0-9\.-]+/g, "") : null
         } else {
@@ -252,6 +281,7 @@ function seekPriceInfo(platform) {
     price = normal_price || presale_price
   } else {
     urlInfo = /(https|http):\/\/item.m.jd.com\/product\/([0-9]*).html/g.exec(window.location.href);
+    if (!urlInfo) return null
     sku = urlInfo[2]
     skuName = $("#itemName").text() ? $("#itemName").text().trim() : null
 
@@ -261,7 +291,7 @@ function seekPriceInfo(platform) {
 
     plus_price = ($('.vip_price #priceSaleChoice1').text() ? $('.vip_price #priceSaleChoice1').text().replace(/[^0-9\.-]+/g, "") : null) || $('#specPlusPrice').text()
 
-    orgin_price = ($("#orginBuyBtn span").text() ? $("#orginBuyBtn span").text().replace(/[^0-9\.-]+/g, "") : null) || $("#ysOriPrice").text() ? $("#ysOriPrice").text().replace(/[^0-9\.-]+/g, "") : null
+    orgin_price = ($("#orginBuyBtn span").text() ? $("#orginBuyBtn span").text().replace(/[^0-9\.-]+/g, "") : null) || ($("#ysOriPrice").text() ? $("#ysOriPrice").text().replace(/[^0-9\.-]+/g, "") : null)
 
     price = normal_price || spec_price || orgin_price
 
@@ -433,6 +463,137 @@ async function dealOrder(order, validProducts, setting) {
   })
 }
 
+function normalizeText(text) {
+  return (text || '').replace(/\s+/g, ' ').trim()
+}
+
+function parseMoney(text) {
+  let matches = normalizeText(text).match(/-?\d+(?:,\d{3})*(?:\.\d+)?/g)
+  let value = matches && matches.length > 0 ? matches[matches.length - 1].replace(/,/g, '') : ''
+  return value ? Number(value) : null
+}
+
+function parseOrderTime(text) {
+  let normalized = normalizeText(text).match(/\d{4}[-/]\d{1,2}[-/]\d{1,2}(?:\s+\d{1,2}:\d{1,2}(?::\d{1,2})?)?/)
+  if (!normalized) return Date.now()
+  let parsed = new Date(normalized[0].replace(/-/g, '/'))
+  return Number.isNaN(parsed.getTime()) ? Date.now() : parsed.getTime()
+}
+
+function extractSkuFromUrl(url) {
+  let match = /(item\.jd\.com\/|item\.m\.jd\.com\/product\/|mitem\.jd\.hk\/product\/)(\d+)/.exec(url || '')
+  return match ? match[2] : null
+}
+
+function normalizeImageUrl(url) {
+  if (!url) return null
+  return url.replace(/^https?:/, '')
+}
+
+function extractOrderCenterGood(goodElement, fallbackPrice) {
+  let good = $(goodElement)
+  let link = good.find('.p-name a[href], .goods-msg a[href], a[href*="item.jd.com"], a[href*="item.m.jd.com"], a[href*="mitem.jd.hk"]').first()
+  let sku = extractSkuFromUrl(link.attr('href'))
+  let name = normalizeText(link.text()) || normalizeText(good.find('.p-name, .goods-msg, .name').first().text())
+  let image = good.find('.p-img img, img').first().attr('src') || good.find('.p-img img, img').first().attr('data-lazy-img')
+  let quantity = parseMoney(good.find('.goods-number, .p-num, .quantity').first().text()) || 1
+  let price = parseMoney(good.find('.p-price, .price, .goods-price').first().text()) || fallbackPrice
+
+  if (!sku || !name || !price || price < 0.01) return null
+
+  return {
+    sku,
+    name,
+    img: normalizeImageUrl(image),
+    order_price: price,
+    logs: [],
+    quantity
+  }
+}
+
+function extractOrderCenterOrder(orderElement) {
+  let order = $(orderElement)
+  let orderIdText = normalizeText(order.find('.number, .order-num, .order-code').first().text()) || order.attr('id')
+  let orderId = orderIdText ? orderIdText.replace(/[^0-9]+/g, '') : null
+  if (!orderId) return null
+
+  let timestamp = parseOrderTime(order.find('.dealtime, .time, .order-time').first().text())
+  let fallbackPrice = parseMoney(order.find('.amount .ftx-13, .amount, .order-price, .price').last().text())
+  let goodNodes = order.find('.goods-item, .goods-list .item, .tr-bd .goods').toArray()
+  if (goodNodes.length < 1) {
+    goodNodes = order.find('a[href*="item.jd.com"], a[href*="item.m.jd.com"], a[href*="mitem.jd.hk"]').closest('td, .goods, .goods-item, .item').toArray()
+  }
+
+  let goods = []
+  goodNodes.forEach((goodNode) => {
+    let good = extractOrderCenterGood(goodNode, fallbackPrice)
+    if (good && !goods.find(item => item.sku == good.sku && item.name == good.name)) {
+      goods.push(good)
+    }
+  })
+
+  if (goods.length < 1) return null
+
+  return {
+    id: orderId,
+    timestamp,
+    goods
+  }
+}
+
+function syncOrderCenterOrders() {
+  if (window.__jjbOrderCenterSyncing) return
+  window.__jjbOrderCenterSyncing = true
+
+  setTimeout(() => {
+    let orderNodes = $('.order-tb, tbody[id^="tb-"], .order-list .order, .order-item').toArray()
+    let orders = []
+
+    orderNodes.forEach((orderNode) => {
+      let order = extractOrderCenterOrder(orderNode)
+      if (order && !orders.find(item => item.id == order.id)) {
+        orders.push(order)
+      }
+    })
+
+    orders.forEach((order, orderIndex) => {
+      setTimeout(() => {
+        chrome.runtime.sendMessage({
+          action: "findOrder",
+          task: { id: "order-center" },
+          orderId: order.id,
+          order: {
+            id: order.id,
+            timestamp: order.timestamp,
+            goods: []
+          }
+        }, function () {
+          order.goods.forEach((good, goodIndex) => {
+            setTimeout(() => {
+              chrome.runtime.sendMessage({
+                action: "findGood",
+                task: { id: "order-center" },
+                orderId: order.id,
+                good
+              }, function () {
+              });
+            }, goodIndex * 80)
+          })
+        });
+      }, orderIndex * 200)
+    })
+
+    if (orders.length > 0) {
+      localStorage.setItem('jjb_last_order_center_sync', new Date().getTime());
+      weui.toast(`已同步${orders.length}个订单`, 1200);
+    }
+
+    setTimeout(() => {
+      window.__jjbOrderCenterSyncing = false
+    }, 2000)
+  }, 500)
+}
+
 async function getAllOrders(mode, setting) {
 
   // 移动价保
@@ -505,43 +666,6 @@ async function getAllOrders(mode, setting) {
 
 
 
-// 15：领取全品类券
-function getCommonUseCoupon(task) {
-  if (task.frequency != 'never') {
-    let time = 0;
-    weui.toast('京价保运行中', 1000);
-    runStatus(task)
-    $("#quanlist .quan-item").each(function () {
-      let that = $(this)
-      if (that.find('.q-ops-box .q-opbtns .txt').text() == '立即领取' && that.find('.q-range').text().indexOf("全品类") > -1) {
-        let coupon_name = that.find('.q-range').text().trim()
-        let coupon_price = that.find('.q-price strong').text().trim() + '元 (' + that.find('.q-limit').text().trim() + ')'
-        let targetBtn = $(that).find('.btn-def')
-        setTimeout(function () {
-          simulateClick(targetBtn, true)
-          setTimeout(function () {
-            if ($(".tip-title").text() && $(".tip-title").text().indexOf("领取成功") > -1) {
-              chrome.runtime.sendMessage({
-                action: "couponReceived",
-                type: "coupon",
-                task: task,
-                log: true,
-                title: "京价保自动领到一张全品类优惠券",
-                content: {
-                  price: coupon_price,
-                  name: coupon_name
-                }
-              }, function (response) {
-              });
-            }
-          }, 1500)
-        }, time)
-        time += 5000;
-      }
-    })
-  }
-}
-
 function runStatus(task, parameters) {
   chrome.runtime.sendMessage(Object.assign({
     action: "runStatus",
@@ -553,50 +677,72 @@ function runStatus(task, parameters) {
 
 // 32：购物车降价
 function priceCutNotice(task) {
-  if (task.frequency != 'never') {
-    let time = 0;
-    weui.toast('京价保运行中', 1000);
-    runStatus(task)
-    $(".item-list .item-item").each(function () {
-      let item = $(this)
-      if (item.find('.pro-tiny-tip').text().indexOf("降价") > -1) {
-        let priceCut = item.find('.pro-tiny-tip').text().trim()
-        let productName = item.find('.p-name').text().trim()
-        let productPrice = item.find('.p-price strong').text().trim()
-        let productImg = item.find('.p-img img').attr("src")
-
-        let productKey = item.attr("id")
-        let lastPriceCut = localStorage.getItem(productKey)
-
-        if (lastPriceCut && lastPriceCut == priceCut) return
-
-        localStorage.setItem(productKey, priceCut)
-
-        setTimeout(function () {
-          setTimeout(function () {
-            chrome.runtime.sendMessage({
-              action: "notice",
-              type: "priceCut",
-              task: task,
-              log: true,
-              title: "发现购物车商品降价",
-              content: {
-                product: {
-                  img: productImg,
-                  name: productName,
-                  sku: item.attr("skuId")
-                },
-                priceCut,
-                newPrice: productPrice
-              },
-            }, function (response) {
-            });
-          }, 1500)
-        }, time)
-        time += 5000;
-      }
+  if (!task || task.frequency == 'never' || window.top !== window) return
+  weui.toast('京价保运行中', 1000)
+  runStatus(task)
+  let attempts = 0
+  let finished = false
+  const reportResult = function (status, content) {
+    if (finished) return
+    finished = true
+    chrome.runtime.sendMessage({
+      action: 'taskRunResult',
+      taskId: task.id,
+      payload: { status, content }
     })
   }
+  const inspectCart = function () {
+    if (finished) return
+    attempts += 1
+    const pageText = ($('body').text() || '').replace(/\s+/g, '')
+    if (/(请登录|账号登录|登录后同步)/.test(pageText)) {
+      reportResult('failed', '购物车页面未登录，请登录京东后重新运行任务')
+      return
+    }
+    const items = $('.item-list .item-item, .cart-item, [class*="cart-item-"]')
+    const cartReady = items.length > 0 || /(购物车空空如也|购物车还是空的|暂无商品)/.test(pageText)
+    if (cartReady) {
+      let priceCutCount = 0
+      const reportedKeys = new Set()
+      items.each(function () {
+        const item = $(this)
+        const itemText = (item.text() || '').replace(/\s+/g, '')
+        if (itemText.indexOf('降价') < 0) return
+        const sku = item.attr('skuId') || item.attr('data-sku') || item.attr('data-skuid')
+        const productName = item.find('.p-name, [class*="name"]').first().text().trim()
+        const productKey = sku || item.attr('id') || productName
+        if (!productKey || reportedKeys.has(productKey)) return
+        reportedKeys.add(productKey)
+        const priceCut = item.find('.pro-tiny-tip, [class*="reduce"], [class*="discount"]').first().text().trim() || '商品价格已降低'
+        const productPrice = item.find('.p-price strong, [class*="price"] strong').first().text().trim()
+        const productImg = item.find('.p-img img, img').first().attr('src')
+        const lastPriceCut = localStorage.getItem('jjb-cart-price-cut:' + productKey)
+        if (lastPriceCut == priceCut) return
+        localStorage.setItem('jjb-cart-price-cut:' + productKey, priceCut)
+        priceCutCount += 1
+        chrome.runtime.sendMessage({
+          action: 'notice',
+          type: 'priceCut',
+          task: task,
+          log: true,
+          title: '发现购物车商品降价',
+          content: {
+            product: { img: productImg, name: productName, sku: sku },
+            priceCut: priceCut,
+            newPrice: productPrice
+          }
+        })
+      })
+      reportResult('success', priceCutCount > 0 ? `购物车检查完成，发现${priceCutCount}件新的降价商品` : `购物车检查完成，检查了${items.length}件商品，未发现新的降价`)
+      return
+    }
+    if (attempts >= 20) {
+      reportResult('failed', '未识别到购物车商品列表，页面可能尚未加载完成或结构已调整')
+      return
+    }
+    window.setTimeout(inspectCart, 750)
+  }
+  inspectCart()
 }
 
 
@@ -637,175 +783,85 @@ function modifyRefundType(mode = "m") {
 
 // 1: 价格保护
 function priceProtect(task) {
-  if (task.frequency != 'never') {
-    weui.toast('京价保运行中', 3500);
-    let mode = "m"
-    let maxPageHeight = 4000 * 20
-    let mainContainer = $(window)
-    if (document.getElementById("mescroll0")) {
-      mainContainer = $("#mescroll0")
-    }
+  if (!task || task.frequency == 'never') return
 
-    if (document.getElementById("dataList")) {
-      mode = "pc"
-    }
+  weui.toast('京价保运行中', 3500)
+  let attempts = 0
+  let finished = false
+  let timer = null
+  let maxPageHeight = 4000 * 20
+  let reportRunResult = function (status, content) {
+    if (finished) return
+    finished = true
+    if (timer) clearTimeout(timer)
+    chrome.runtime.sendMessage({
+      action: 'priceProtectionNotice',
+      task: task,
+      log: true,
+      batch: 'jiabao-run',
+      status: status,
+      silent: status == 'success',
+      title: status == 'success' ? '价格保护检查完成' : '价格保护检查未完成',
+      content: content
+    })
+  }
+  let inspectPage = function () {
+    if (finished) return
+    attempts += 1
+    let mode = document.getElementById('dataList') ? 'pc' : 'm'
+    let mainContainer = document.getElementById('mescroll0') ? $('#mescroll0') : $(window)
+    let productCount = $('.bd-product-list li, #dataList0 li, #dataList .tr-th, .co-th').length
+    let pageText = ($('body').text() || '').replace(/\s+/g, '')
 
-    // 加载更多
-    mainContainer.scrollTop(maxPageHeight);
-    setTimeout(() => {
-      mainContainer.scrollTop(maxPageHeight);
-    }, 3000);
-    setTimeout(() => {
-      mainContainer.scrollTop(maxPageHeight);
-    }, 6000);
-    setTimeout(() => {
-      mainContainer.scrollTop(0)
-    }, 6500);
-    setTimeout(() => {
-      modifyRefundType(mode)
-    }, 7500);
-
-    if ($(".bd-product-list li").length > 0 || $(".co-th").length > 0) {
-      // console.log('成功获取价格保护商品列表', new Date())
-      runStatus(task, {
-        mode: mode
-      })
+    mainContainer.scrollTop(maxPageHeight)
+    if (productCount > 0) {
+      runStatus(task, { mode: mode })
+      setTimeout(() => {
+        mainContainer.scrollTop(0)
+        modifyRefundType(mode)
+      }, 6500)
       chrome.runtime.sendMessage({
-        text: "getPriceProtectionSetting"
+        text: 'getPriceProtectionSetting'
       }, function (response) {
         setTimeout(function () {
-          getAllOrders(mode, response)
+          try {
+            getAllOrders(mode, response || {
+              pro_min: 0.1,
+              prompt_only: false,
+              suspendedApplyIds: []
+            })
+            reportRunResult('success', `已读取价保页面，发现${productCount}组有效商品记录`)
+          } catch (error) {
+            reportRunResult('failed', `处理价保商品时发生错误：${error.message || error}`)
+          }
         }, 10 * 1000)
-      });
-    } else {
-      // console.log('好尴尬，最近没有买东西..', new Date())
+      })
+      return
     }
+
+    if (/(暂无.*(?:订单|商品)|没有.*(?:价保|订单)|暂无可申请|无可申请)/.test(pageText)) {
+      runStatus(task, { mode: mode })
+      reportRunResult('success', '价保页面读取完成，当前没有可申请价保的商品')
+      return
+    }
+    if (/(系统繁忙|加载失败|访问异常|网络异常)/.test(pageText)) {
+      reportRunResult('failed', '京东价保页面加载失败，请稍后重新运行')
+      return
+    }
+    if (attempts >= 20) {
+      reportRunResult('failed', '未识别到京东价保商品列表，可能需要重新登录或页面结构已调整')
+      return
+    }
+    timer = setTimeout(inspectPage, 2000)
   }
+
+  inspectPage()
 }
 
 
 
 // 显示引荐来源
 // showUtmSource removed
-
-
-// 剁手保护模式
-function handProtection(setting, priceInfo) {
-  if (setting == "checked") {
-    // console.log('剁手保护模式')
-    let buyDom = $("#InitCartUrl").length > 0 ? $("#InitCartUrl") : $("#btn-reservation")
-    let item = $(".ellipsis").text()
-    let price = priceInfo ? (priceInfo.normal_price || priceInfo.plus_price) : ($('.p-price .price').text() ? $('.p-price .price').text().replace(/[^0-9\.-]+/g, "") : null) || ($('#jd-price').text() ? $('#jd-price').text().replace(/[^0-9\.-]+/g, "") : null)
-
-    // Create dialogMsg safely
-    let dialogMsg = document.createElement('dialog');
-    dialogMsg.id = 'dialogMsg';
-    dialogMsg.className = 'message';
-    let p = document.createElement('p');
-    p.className = 'green-text';
-    p.textContent = '恭喜你省下了 ¥' + price + ' ！';
-    dialogMsg.appendChild(p);
-    document.body.appendChild(dialogMsg);
-
-    buyDom.removeAttr("clstag")
-    buyDom.on("click", function () {
-      let count = $('#buy-num').val()
-      // 移除此前的提示
-      if ($("#dialog").length > 0) {
-        $("#dialog").remove()
-      }
-
-      // Create main dialog safely
-      let dialog = document.createElement('dialog');
-      dialog.id = 'dialog';
-
-      let closeSpan = document.createElement('span');
-      closeSpan.className = 'close';
-      closeSpan.textContent = 'x';
-      dialog.appendChild(closeSpan);
-
-      let form = document.createElement('form');
-      form.method = 'dialog';
-      dialog.appendChild(form);
-
-      let h3 = document.createElement('h3');
-      h3.textContent = '你真的需要买' + (Number(count) > 1 ? count + '个' : '') + item + '吗?';
-      form.appendChild(h3);
-
-      let considerationDiv = document.createElement('div');
-      considerationDiv.className = 'consideration';
-      const questions = [
-        '它是必须的吗？使用的频率足够高吗？',
-        '它真的可以解决你的需求吗？现有方案完全无法接受吗？',
-        '如果收到不合适，它在试用之后退款方便吗？',
-        '现在购买它的价格 ¥' + price + ' 合适吗？'
-      ];
-      if (Number(count) > 1) questions.push('有必要现在购买 ' + count + '个吗？');
-
-      questions.forEach(q => {
-        let p = document.createElement('p');
-        p.textContent = q;
-        considerationDiv.appendChild(p);
-      });
-      form.appendChild(considerationDiv);
-
-      let actionsDiv = document.createElement('div');
-      actionsDiv.className = 'actions';
-
-      let link = document.createElement('a');
-      link.href = buyDom.attr("href");
-      link.className = 'volume-purchase forcedbuy';
-      link.target = '_blank';
-      link.textContent = '坚持购买';
-      actionsDiv.appendChild(link);
-
-      let giveUpBtn = document.createElement('button');
-      giveUpBtn.type = 'submit';
-      giveUpBtn.value = 'no';
-      giveUpBtn.className = 'giveUp btn-special2 btn-lg';
-      giveUpBtn.autofocus = true;
-      giveUpBtn.textContent = '一键省钱';
-      actionsDiv.appendChild(giveUpBtn);
-
-      form.appendChild(actionsDiv);
-
-      let admonishP = document.createElement('p');
-      admonishP.className = 'admonish';
-      admonishP.textContent = '若无必要，勿增实体';
-      form.appendChild(admonishP);
-
-      document.body.appendChild(dialog);
-
-      // var dialog = document.getElementById('dialog');
-      // var dialogMsg = document.getElementById('dialogMsg');
-      dialogPolyfill.registerDialog(dialog);
-      dialogPolyfill.registerDialog(dialogMsg);
-      dialog.showModal();
-
-      closeSpan.onclick = function () {
-        dialog.close();
-      };
-
-      dialog.addEventListener('close', function onClose() {
-        // console.log('dialog close', dialog.returnValue)
-        if (dialog.returnValue == 'no') {
-          setTimeout(() => {
-            dialogMsg.showModal();
-          }, 50);
-          setTimeout(() => {
-            dialogMsg.close();
-            if (confirm("京价保剁手保护模式准备帮你关闭这个标签页，确认要关闭吗?")) {
-              window.close();
-            }
-          }, 1000);
-        }
-      });
-
-      return false;
-    })
-  }
-}
-
 // 模拟点击
 function simulateClick(dom, mouseEvent) {
   let domNode = dom.get(0)
@@ -825,26 +881,29 @@ function simulateClick(dom, mouseEvent) {
   }
 }
 
-function markCheckinStatus(type, value, cb) {
-  chrome.runtime.sendMessage({
-    action: "markCheckinStatus",
-    batch: type,
-    value: value,
-    status: "signed"
-  }, function (response) {
-    // console.log('markCheckinStatus response', response)
-    if (cb && response) { cb() }
-  });
-}
-
 function createAutoLoginElement() {
   let p = document.createElement('p');
   p.className = 'auto_login';
+  p.setAttribute('data-jjb-auto-login', 'true');
   let span = document.createElement('span');
   span.className = 'jjb-login';
   span.textContent = '让京价保记住密码并自动登录';
   p.appendChild(span);
   return p;
+}
+
+function getMobileLoginButton() {
+  let candidates = $(".page a.btn.J_ping, .page a.btn, .page button, .page [role='button']").filter(function () {
+    let text = $(this).text().trim()
+    return text.indexOf('登录') > -1
+  })
+  return candidates.first()
+}
+
+function mountAutoLoginElement(container, target) {
+  let targetElement = target && target.length ? target : null
+  if (!targetElement || container.find('[data-jjb-auto-login="true"]').length > 0) return
+  targetElement.after(createAutoLoginElement())
 }
 
 // 保存账号
@@ -884,16 +943,6 @@ function getSetting(name, cb) {
   chrome.runtime.sendMessage({
     text: "getSetting",
     content: name
-  }, function (response) {
-    cb(response)
-  });
-}
-
-// 获取任务设置
-function getTask(taskId, cb) {
-  chrome.runtime.sendMessage({
-    action: "getTask",
-    taskId: taskId
   }, function (response) {
     cb(response)
   });
@@ -946,7 +995,7 @@ function autoLogin(account, type) {
       if (type == 'pc') {
         simulateClick($(".login-btn a"), true)
       } else {
-        simulateClick($(".page a.btn.J_ping"), true)
+        simulateClick(getMobileLoginButton(), true)
       }
     }, 1200);
   }
@@ -1001,7 +1050,7 @@ function autoLogin(account, type) {
     $("#pwd").val(account.password)
     $("#username")[0].dispatchEvent(new Event('input', { bubbles: true }))
     $("#pwd")[0].dispatchEvent(new Event('input', { bubbles: true }))
-    $(".page a.btn.J_ping").addClass("btn-active")
+    getMobileLoginButton().addClass("btn-active")
     // 自动登录
     function mLogin() {
       setTimeout(function () {
@@ -1049,9 +1098,9 @@ function dealLoginPage() {
     simulateClick($(".planBLogin"), true)
 
     getAccount('m')
-    $(".page .notice").after(createAutoLoginElement())
+    mountAutoLoginElement($('.page'), $(".page .notice").last())
     // 点击让京价保自动登录
-    $('.page').on('click', '.jjb-login', function (e) {
+    $('.page').off('click.jjbLogin').on('click.jjbLogin', '.jjb-login', function (e) {
       window.event ? window.event.returnValue = false : e.preventDefault();
       let username = $("#username").val()
       let password = $("#pwd").val()
@@ -1062,8 +1111,9 @@ function dealLoginPage() {
           password: password
         })
       }
-      simulateClick($(".page a.btn.J_ping"), true)
+      simulateClick(getMobileLoginButton(), true)
     })
+    return
   };
   // PC版登录页
   if ($(".login-tab-r").length > 0 && $("#loginname").length > 0) {
@@ -1071,8 +1121,8 @@ function dealLoginPage() {
     simulateClick($(".login-tab-r a"), true)
     // 获取账号
     getAccount('pc')
-    $("#formlogin").after(createAutoLoginElement())
-    $('.login-box').on('click', '.jjb-login', function (e) {
+    mountAutoLoginElement($('.login-box'), $("#formlogin"))
+    $('.login-box').off('click.jjbLogin').on('click.jjbLogin', '.jjb-login', function (e) {
       window.event ? window.event.returnValue = false : e.preventDefault();
       var username = $("#loginname").val()
       var password = $("#nloginpwd").val()
@@ -1090,155 +1140,261 @@ function dealLoginPage() {
 
 
 
-// 16: 白条免息红包（baitiao）
-function baitiaoLottery(task) {
-  if (task.frequency != 'never') {
-    weui.toast('京价保运行中', 1000);
-    runStatus(task)
-    setTimeout(() => {
-      simulateClick($("#lottery .mark_btn_start"), true)
-    }, 1500);
-    observeDOM(document.body, function (observer) {
-      let resultElement = $('.layer_wrap_header:visible')
-      if (resultElement && resultElement.text().indexOf('恭喜') > -1) {
-        if (observer) observer.disconnect();
-        let result = $('.layer_wrap_content p:visible').first().text()
-        markCheckinStatus('baitiao', result, () => {
-          chrome.runtime.sendMessage({
-            action: "checkin_notice",
-            task: task,
-            log: true,
-            title: "京价保自动为您白条签到",
-            content: "恭喜您获得了" + result
-          }, function (response) {
-            console.log("Response: ", response);
-          })
-        })
-      }
-      if ($(".jrm-tips").text() == '您今天已签到,请明天再来') {
-        markCheckinStatus('baitiao')
-      }
-    })
+function beanCheckin(task) {
+  if (!task || task.frequency == 'never' || window.top !== window) return
+  runStatus(task)
+  let finished = false
+  let attempts = 0
+  let clicked = false
+  let lastPageMarker = ''
+  let initialBeanBalance = null
+  const normalizeText = function (text) {
+    return (text || '').replace(/\s+/g, '')
   }
-}
-
-
-
-// 22: 金币
-function getGoldCoin(task) {
-  if (task && task.frequency != 'never') {
-    let time = 0;
-    weui.toast('京价保运行中', 1000);
-    runStatus(task)
-    if ($(".header-content-right .btn").length > 0 && $(".header-content-right .btn").text().indexOf('可领') > -1 || $(".header-content-right .btn").text().indexOf('领金币') > -1) {
-      simulateClick($(".header-content-right .btn"), true)
-
-      setTimeout(() => {
-        if ($(".dialogBgCont .getBtn").text().indexOf('立即领取') > -1) {
-          simulateClick($(".dialogBgCont .getBtn"))
-          let uuid = Date.now()
-          observeDOM(document.body, (observer) => {
-            const observerItem = $(".jm-toast")
-            if (observerItem.text().indexOf('成功') > -1) {
-              if (observer) observer.disconnect();
-              let value = $(".dialogBgCont .red").text().replace(/[^0-9\.-]+/g, "")
-              return markCheckinStatus('gcmall', `${value}个金币`, () => {
-                chrome.runtime.sendMessage({
-                  task: task,
-                  log: true,
-                  action: "goldCoinReceived",
-                  title: "京价保自动为您领取金币",
-                  value: value,
-                  reward: "goldCoin",
-                  content: `恭喜您领到了${value}个金币`,
-                  uuid: uuid
-                }, function (response) {
-                });
-              })
-            }
-          })
-        }
-
-        $(".coinItem").each(function (index) {
-          let getBtn = $(this).find('.coinBtn')
-          if (getBtn.text() == '立即领取') {
-            setTimeout(function () {
-              simulateClick($(getBtn))
-              let uuid = Date.now()
-              observeDOM(document.body, (observer) => {
-                const observerItem = $(".jm-toast")
-                if (observerItem.text().indexOf('成功') > -1) {
-                  if (observer) observer.disconnect();
-                  let value = $(".coinItem").get(index).find(".coinNum").text().replace(/[^0-9\.-]+/g, "")
-                  return markCheckinStatus('gcmall', `${value}个金币`, () => {
-                    chrome.runtime.sendMessage({
-                      task: task,
-                      log: true,
-                      action: "goldCoinReceived",
-                      title: "京价保自动为您领取金币",
-                      value: value,
-                      reward: "goldCoin",
-                      content: `恭喜您领到了${value}个金币`,
-                      uuid: uuid
-                    }, function (response) {
-                    });
-                  })
-                }
-              })
-            }, time)
-            time += 5000;
-          }
-        })
-      }, 1000);
-    } else {
-      if ($(".header-content-right .btn").text() == '去赚金币') {
-        markCheckinStatus('gcmall')
+  const parseBeanNumber = function (value) {
+    if (typeof value == 'number' && value >= 0) return value
+    const match = String(value || '').replace(/,/g, '').match(/[0-9]+/)
+    return match ? Number(match[0]) : null
+  }
+  const getSpecificDomBeanBalance = function () {
+    const selectors = [
+      '.my-card-bean-num',
+      '.my-card-bean-num-container .num',
+      '.my-card-bean-num-container [class*="num"]',
+      '[class*="my-card-bean-num"]'
+    ]
+    for (let index = 0; index < selectors.length; index += 1) {
+      const elements = $(selectors[index]).filter(':visible').toArray()
+      for (let elementIndex = 0; elementIndex < elements.length; elementIndex += 1) {
+        const balance = parseBeanNumber($(elements[elementIndex]).text())
+        if (balance !== null) return balance
       }
     }
+    return null
   }
-}
-
-// 23: 京东支付单单返
-function getJDPayBean(task) {
-  if (task && task.frequency != 'never') {
-    let time = 0;
-    weui.toast('京价保运行中', 1000);
-    runStatus(task)
-
-    const paybackBeansNumber = $("#index .per-payback-beens .beens-part .number").text().replace(/[^0-9\.-]+/g, "")
-    if (Number(paybackBeansNumber) < 1) {
-      return console.log('no beans')
-    }
-    $("#index .per-payback-beens .btn").each(function () {
-      let that = $(this)
-      if (that.text().indexOf("立即领取") > -1) {
-        setTimeout(function () {
-          simulateClick($(that))
-          let uuid = Date.now()
-          observeDOM(document.body, function (observer) {
-            let resultElement = $(".jrm-dialog-box .title")
-            if (resultElement && resultElement.text().indexOf('获得') > -1) {
-              if (observer) observer.disconnect();
-              let value = $(".jrm-dialog-box .num").text().replace(/[^0-9\.-]+/g, "")
-              return chrome.runtime.sendMessage({
-                task: task,
-                log: true,
-                action: "beanReceived",
-                title: "京价保自动为您领取单单返京豆",
-                value: value,
-                reward: "bean",
-                content: `恭喜您领到了${value}个京豆`,
-                uuid: uuid
-              }, function (response) {
-              });
-            }
-          })
-        }, time)
-        time += 5000;
+  const getStoredBeanBalance = function () {
+    const stores = [sessionStorage, localStorage]
+    for (let index = 0; index < stores.length; index += 1) {
+      const store = stores[index]
+      if (!store) continue
+      const keys = ['overview', 'beanOverview', 'myBeanOverview']
+      for (let keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
+        try {
+          const raw = store.getItem(keys[keyIndex])
+          if (!raw) continue
+          const data = JSON.parse(raw)
+          const balance = parseBeanNumber(data.balanceStr || data.balance || data.beanBalance || data.jdBean)
+          if (balance !== null) return balance
+        } catch (error) { }
       }
+    }
+    return null
+  }
+  const getDomBeanBalance = function () {
+    const specificBalance = getSpecificDomBeanBalance()
+    if (specificBalance !== null) return specificBalance
+    const selectors = [
+      '[class*="balance"]',
+      '[class*="Balance"]',
+      '[class*="bean"]',
+      '[class*="Bean"]',
+      '[class*="amount"]',
+      '[class*="Amount"]',
+      '[class*="num"]',
+      '[class*="Num"]',
+      '[class*="count"]',
+      '[class*="Count"]'
+    ].join(',')
+    const patterns = [
+      /(?:京豆余额|当前京豆|可用京豆|京豆总数|京豆数量|我的京豆|余额)(?:为|:|：)?([0-9,]+)/,
+      /(?:余额|当前|可用)(?:[^0-9]{0,12})([0-9,]+)(?:个)?京豆/,
+      /([0-9,]+)(?:个)?京豆(?:余额|可用)?/
+    ]
+    const candidates = $(selectors).filter(':visible').toArray()
+    for (let index = 0; index < candidates.length; index += 1) {
+      const marker = normalizeText([
+        $(candidates[index]).text(),
+        $(candidates[index]).attr('class'),
+        $(candidates[index]).attr('id')
+      ].filter(Boolean).join(' '))
+      if (!marker || marker.length > 160 || !/(京豆|余额|当前|可用|bean)/i.test(marker)) continue
+      for (let patternIndex = 0; patternIndex < patterns.length; patternIndex += 1) {
+        const match = marker.match(patterns[patternIndex])
+        const balance = match ? parseBeanNumber(match[1]) : null
+        if (balance !== null) return balance
+      }
+    }
+    return null
+  }
+  const getBeanBalance = function () {
+    const domBalance = getDomBeanBalance()
+    if (domBalance !== null) return domBalance
+    return getStoredBeanBalance()
+  }
+  const getElementMarker = function (element) {
+    const node = element && element.get ? element.get(0) : null
+    if (!node) return ''
+    return normalizeText([
+      element.text(),
+      element.attr('aria-label'),
+      element.attr('title'),
+      element.attr('class'),
+      element.attr('id'),
+      element.attr('href'),
+      element.attr('onclick'),
+      element.attr('clstag'),
+      element.attr('data-click'),
+      element.attr('data-event')
+    ].filter(Boolean).join(' '))
+  }
+  const isDisabledCheckinElement = function (element, marker) {
+    return element.is(':disabled, [disabled], .disabled, .disable, .disable-apply') ||
+      /(已签到|已领取|明天再来|签到记录|签到日历|签到明细|规则|攻略|任务|去完成)/.test(marker)
+  }
+  const isCheckinEntryMarker = function (marker) {
+    if (!marker) return false
+    if (/(签到领?京豆|领京豆|领取京豆|立即签到|马上签到|去签到|点此签到|每日签到|做签到|打卡领|签到有礼)/.test(marker)) return true
+    return /(sign|signin|checkin|qiandao|qd|bean)/i.test(marker) && /(京豆|签到|领|receive|award|bean)/i.test(marker)
+  }
+  const getSignRoot = function () {
+    return $('#mybean-sign, #bean-sign-component, .mybean-card').filter(':visible').first()
+  }
+  const isBeanAlreadySigned = function () {
+    const signRoot = getSignRoot()
+    if (!signRoot.length) return false
+    const currentNode = signRoot.find('.node.current').filter(':visible').first()
+    if (currentNode.length) {
+      const currentClass = String(currentNode.attr('class') || '')
+      if (/(no-sign|nosign|un-sign|unsigned|continuity-no-sign)/i.test(currentClass)) return false
+      if (/(sign-in|signed|finish|complete|done|success)/i.test(currentClass)) return true
+    }
+    return /(今日已签到|已签到|已领取|明天再来)/.test(normalizeText(signRoot.text()))
+  }
+  const findSdkCheckinButton = function () {
+    const sdkRoot = getSignRoot()
+    if (!sdkRoot.length) return $()
+    const rootText = normalizeText(sdkRoot.text())
+    if (!/(签到领?京豆|今天|明天|后天|连签|京豆)/.test(rootText)) return $()
+    return sdkRoot.find('#bean-sign-component .btn, .btn').filter(function () {
+      const element = $(this)
+      if (!element.is(':visible')) return false
+      if (element.is(':disabled, [disabled], .disabled, .disable')) return false
+      return element.closest('#mybean-sign, #bean-sign-component, .mybean-card').length > 0
+    }).first()
+  }
+  const clickCheckinButton = function (button) {
+    const node = button && button.get ? button.get(0) : null
+    if (!node) return
+    try {
+      node.scrollIntoView({ block: 'center', inline: 'center' })
+    } catch (error) { }
+    simulateClick(button, true)
+    try {
+      node.click()
+    } catch (error) { }
+  }
+  const reportResult = function (status, content, value, balance, beforeBalance) {
+    if (finished) return
+    finished = true
+    chrome.runtime.sendMessage({
+      action: 'beanCheckinPageResult',
+      taskId: task.id,
+      payload: { status, content, value, balance, beforeBalance }
     })
   }
+  const reportSuccess = function (content, value, waitForValue) {
+    const expectedBalance = initialBeanBalance !== null && value ? initialBeanBalance + value : null
+    let balanceAttempts = 0
+    const waitForBalance = function () {
+      if (finished) return
+      balanceAttempts += 1
+      const balance = getBeanBalance()
+      const inferredValue = !value && initialBeanBalance !== null && balance !== null && balance > initialBeanBalance
+        ? balance - initialBeanBalance
+        : value
+      const canReport = expectedBalance
+        ? (balance !== null && balance >= expectedBalance)
+        : (inferredValue || (!waitForValue && isBeanAlreadySigned()) || balanceAttempts >= 6)
+      if (canReport) {
+        reportResult('success', content, inferredValue, balance, initialBeanBalance)
+        return
+      }
+      window.setTimeout(waitForBalance, 1000)
+    }
+    waitForBalance()
+  }
+  const findCheckinButton = function () {
+    const sdkButton = findSdkCheckinButton()
+    if (sdkButton.length) return sdkButton
+    const candidates = $('a, button, [role="button"], [tabindex], [class*="sign"], [class*="Sign"], [class*="check"], [class*="Check"], [class*="qiandao"], [class*="bean"], div, span').filter(function () {
+      const element = $(this)
+      if (!element.is(':visible')) return false
+      const marker = getElementMarker(element)
+      if (marker.length > 600) return false
+      return isCheckinEntryMarker(marker) && !isDisabledCheckinElement(element, marker)
+    })
+    const sorted = candidates.toArray().sort(function (left, right) {
+      const leftMarker = getElementMarker($(left))
+      const rightMarker = getElementMarker($(right))
+      const score = function (marker, node) {
+        let value = 0
+        if (/(签到领?京豆|领取京豆|领京豆)/.test(marker)) value += 5
+        if (/(立即签到|马上签到|去签到|点此签到|每日签到)/.test(marker)) value += 4
+        if (/(button|btn|sign|checkin|qiandao|qd)/i.test(marker)) value += 2
+        if (/^(A|BUTTON)$/i.test(node.tagName)) value += 2
+        if (marker.length < 120) value += 1
+        return value
+      }
+      return score(rightMarker, right) - score(leftMarker, left)
+    })
+    return $(sorted).first()
+  }
+  const inspectPage = function () {
+    if (finished) return
+    attempts += 1
+    const pageText = normalizeText($('body').text())
+    if (initialBeanBalance === null) initialBeanBalance = getBeanBalance()
+    if (/我的京豆/.test(pageText)) lastPageMarker = '我的京豆页面已加载'
+    if (/(签到|京豆)/.test(pageText)) lastPageMarker = '页面包含签到/京豆模块'
+    const rewardMatch = pageText.match(/签到成功[^+]{0,100}\+([0-9]+)/)
+    if (/(签到成功|领取成功)/.test(pageText)) {
+      const value = rewardMatch ? Number(rewardMatch[1]) : null
+      reportSuccess(null, value, clicked)
+      return
+    }
+    if (isBeanAlreadySigned()) {
+      const balance = getBeanBalance()
+      if (clicked) {
+        reportSuccess('今日京豆签到已完成', null, true)
+      } else {
+        reportResult('success', '今日京豆签到已完成', null, balance)
+      }
+      return
+    }
+    if (/(请先登录|登录后查看|账号登录)/.test(pageText)) {
+      reportResult('failed', '我的京豆页面未登录，请登录京东后重新运行任务')
+      return
+    }
+    const button = findCheckinButton()
+    if (button.length && !clicked) {
+      clicked = true
+      lastPageMarker = button.closest('#mybean-sign, #bean-sign-component, .mybean-card').length > 0
+        ? '已找到京豆签到SDK图片按钮'
+        : `已找到签到入口：${getElementMarker(button).slice(0, 80)}`
+      clickCheckinButton(button)
+    }
+    if (attempts >= 75) {
+      reportResult(
+        'failed',
+        clicked ? `已点击京豆签到入口，但页面未返回签到结果，请稍后重试。${lastPageMarker}` : `我的京豆页面未找到可点击签到入口，请确认页面已登录。${lastPageMarker || '页面未出现京豆签到模块'}`
+      )
+      return
+    }
+    window.setTimeout(inspectPage, 1000)
+  }
+  inspectPage()
 }
+
 
 
 // ************
@@ -1253,17 +1409,8 @@ function triggerTask(task) {
     case '1':
       priceProtect(task)
       break;
-    // 15: 全品类券
-    case '15':
-      getCommonUseCoupon(task)
-      break;
-    // 16: 白条免息红包
-    case '16':
-      baitiaoLottery(task)
-      break;
-    // 22: 金币
-    case '22':
-      getGoldCoin(task)
+    case '11':
+      beanCheckin(task)
       break;
     // 32: 购物车降价
     case '32':
@@ -1341,13 +1488,17 @@ function CheckDom() {
     simulateClick($("#pcprompt-viewpc"))
   }
 
+  // 京东订单中心
+  if (window.location.host == 'order.jd.com' && window.location.pathname == '/center/list.action') {
+    setTimeout(syncOrderCenterOrders, 1500);
+    setTimeout(syncOrderCenterOrders, 5000);
+    setTimeout(syncOrderCenterOrders, 10000);
+  }
+
   // 商品页
   if (window.location.host == 'item.jd.com') {
     setTimeout(() => {
-      let priceInfo = seekPriceInfo('pc');
-      getSetting('hand_protection', (setting) => {
-        handProtection(setting, priceInfo)
-      })
+      seekPriceInfo('pc');
     }, 1500);
   }
 
@@ -1357,61 +1508,6 @@ function CheckDom() {
       seekPriceInfo("m");
     }, 500);
   }
-
-  // 移动页增加滑动支持
-  if (window.location.host == 'm.jd.com' || window.location.host == 'm.jr.jd.com' || window.location.host == "plogin.m.jd.com") {
-    injectScript(chrome.extension.getURL('/static/touch-emulator.js'), 'body');
-    injectScriptCode(`
-      setTimeout(function () {
-        const touchEmulatorRes = TouchEmulator({ force: true });
-        // console.log('TouchEmulator', touchEmulatorRes)
-      }, 200)
-    `, 'body')
-  }
-
-  // 会员页签到 (5:京东会员签到)
-  if ($(".sign-pop").length || $(".signin .signin-days").length || window.location.host == 'vip.m.jd.com') {
-    getTask('5', vipCheckin)
-  };
-
-  // 16 白条签到
-  if ($("#lottery .mark_btn_start").length || $("#lottery .mark_btn_start").length > 0) {
-    getTask('16', baitiaoLottery)
-  };
-
-
-  // 京豆签到 (11:京豆签到)
-  if (window.location.host == 'bean.m.jd.com') {
-    getTask('11', beanCheckin)
-  }
-
-  // 钢镚签到 (14:钢镚签到)
-  if (window.location.origin == "https://coin.jd.com" && window.location.pathname == "/m/gb/index.html") {
-    injectScriptCode(`
-      function canvasEventListener() {
-        let canvas = $("#myCanvas")[0];
-        canvas.addEventListener('touchstart', canvas.ontouchstart);
-        canvas.addEventListener('touchmove', canvas.ontouchmove);
-        canvas.addEventListener('touchend', canvas.ontouchend);
-      };
-      canvasEventListener();
-    `, 'body')
-    setTimeout(() => {
-      getTask('14', getCoin);
-    }, 1000);
-  };
-
-  // 单独的领券页面
-  if ($("#js_detail .coupon_get") && $(".coupon_get .js_getCoupon").length > 0) {
-    // console.log('单独的领券页面', $("#js_detail .coupon_get").find('.js_getCoupon'))
-    $("#js_detail .coupon_get").find('.js_getCoupon').trigger("tap")
-    $("#js_detail .coupon_get").find('.js_getCoupon').trigger("click")
-  }
-
-  // 领取精选券
-  if ($(".coupon_sec_body").length > 0) {
-    getTask('2', pickupCoupon)
-  };
 
   // 手机验证码
   if ($('.tip-box').length > 0 && $(".tip-box").text().indexOf("账户存在风险") > -1) {
