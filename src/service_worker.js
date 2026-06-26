@@ -19,18 +19,46 @@ async function setupOffscreenDocument(path) {
     if (creating) {
         await creating;
     } else {
-        creating = chrome.offscreen.createDocument({
-            url: path,
-            reasons: ['DOM_SCRAPING', 'BLOBS', 'IFRAME_SCRIPTING', 'AUDIO_PLAYBACK'],
-            justification: 'Running legacy background logic including DOM manipulation, LocalStorage and Audio',
-        });
-        await creating;
-        creating = null;
+        try {
+            creating = chrome.offscreen.createDocument({
+                url: path,
+                reasons: ['DOM_SCRAPING', 'BLOBS', 'IFRAME_SCRIPTING', 'AUDIO_PLAYBACK'],
+                justification: 'Running legacy background logic including DOM manipulation, LocalStorage and Audio',
+            });
+            await creating;
+        } finally {
+            creating = null;
+        }
     }
 }
 
 async function ensureOffscreen() {
     await setupOffscreenDocument(OFFSCREEN_DOCUMENT_PATH);
+}
+
+function chromeCallback(sendResponse, result) {
+    const error = chrome.runtime.lastError;
+    sendResponse(error ? { error: error.message } : { result });
+}
+
+function normalizeExtensionImage(url) {
+    if (!url || url.startsWith('data:')) {
+        return chrome.runtime.getURL('static/image/icon/128.png');
+    }
+    if (url.startsWith('http:') || url.startsWith('https:') || url.startsWith('chrome-extension:')) {
+        return url;
+    }
+    return chrome.runtime.getURL(url.replace(/^\/+/, ''));
+}
+
+function sendToOffscreen(message) {
+    return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(message, response => {
+            const error = chrome.runtime.lastError;
+            if (error) reject(new Error(error.message));
+            else resolve(response);
+        });
+    });
 }
 
 // Proxies for communicating with the offscreen document
@@ -74,6 +102,8 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 
 // Comprehensive Chrome API proxy for offscreen document
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    const legacyAction = message.action || message.text;
+
     // Context Menu handling
     if (message.type === 'UPDATE_CONTEXT_MENU') {
         if (message.action === 'create') {
@@ -103,18 +133,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         } else if (method === 'setTitle') {
             chrome.action.setTitle(args[0]);
         } else if (method === 'setIcon') {
-            // Convert relative paths to absolute URLs
             const iconDetails = args[0];
-            if (iconDetails.path) {
-                if (typeof iconDetails.path === 'string') {
-                    iconDetails.path = chrome.runtime.getURL(iconDetails.path);
-                } else if (typeof iconDetails.path === 'object') {
-                    for (const size in iconDetails.path) {
-                        iconDetails.path[size] = chrome.runtime.getURL(iconDetails.path[size]);
-                    }
-                }
-            }
-            chrome.action.setIcon(iconDetails);
+            chrome.action.setIcon(iconDetails, () => {
+                const error = chrome.runtime.lastError;
+                if (!error) return;
+                chrome.action.setIcon({ path: 'static/image/icon/128.png' }, () => {
+                    void chrome.runtime.lastError;
+                });
+            });
         }
         return false;
     }
@@ -142,29 +168,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const { method, args } = message;
         if (method === 'create') {
             chrome.tabs.create(args[0], (tab) => {
-                sendResponse({ result: tab });
+                chromeCallback(sendResponse, tab);
             });
             return true;
         } else if (method === 'get') {
-            chrome.tabs.get(args[0], (tab) => {
-                sendResponse({ result: tab });
-            });
+            const tabId = Number(args[0]);
+            if (!Number.isInteger(tabId)) {
+                sendResponse({ error: 'Invalid tab id' });
+                return false;
+            }
+            chrome.tabs.get(tabId, (tab) => chromeCallback(sendResponse, tab));
             return true;
         } else if (method === 'remove') {
             chrome.tabs.remove(args[0]);
         } else if (method === 'update') {
             chrome.tabs.update(args[0], args[1], (tab) => {
-                sendResponse({ result: tab });
+                chromeCallback(sendResponse, tab);
             });
             return true;
         } else if (method === 'query') {
             chrome.tabs.query(args[0], (tabs) => {
-                sendResponse({ result: tabs });
+                chromeCallback(sendResponse, tabs);
             });
             return true;
         } else if (method === 'sendMessage') {
             chrome.tabs.sendMessage(args[0], args[1], args[2], (response) => {
-                sendResponse({ result: response });
+                chromeCallback(sendResponse, response);
             });
             return true;
         }
@@ -175,8 +204,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'CHROME_NOTIFICATIONS') {
         const { method, args } = message;
         if (method === 'create') {
-            chrome.notifications.create(args[0], args[1], (notificationId) => {
-                sendResponse({ result: notificationId });
+            const notificationOptions = {
+                ...args[1],
+                iconUrl: normalizeExtensionImage(args[1] && args[1].iconUrl)
+            };
+            chrome.notifications.create(args[0], notificationOptions, (notificationId) => {
+                const error = chrome.runtime.lastError;
+                if (!error) {
+                    sendResponse({ result: notificationId });
+                    return;
+                }
+                const fallbackOptions = {
+                    ...notificationOptions,
+                    iconUrl: chrome.runtime.getURL('static/image/icon/128.png')
+                };
+                delete fallbackOptions.imageUrl;
+                chrome.notifications.create(args[0], fallbackOptions, fallbackId => {
+                    chromeCallback(sendResponse, fallbackId);
+                });
             });
             return true;
         }
@@ -205,13 +250,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     // Message Proxy for Legacy Actions (handle via Offscreen Document)
     const legacyActions = [
-        'saveLoginState', 'getAccount', 'autoLogin', 'getTask', 'getSetting',
-        'setVariable', 'priceProtectionNotice', 'checkin_notice', 'goldCoinReceived',
-        'beanReceived', 'markCheckinStatus', 'saveAccount', 'runStatus', 'create_tab',
-        'couponReceived', 'productPrice', 'promotions', 'getPageSetting',
+        'saveLoginState', 'getLoginState', 'getAccount', 'autoLogin', 'getTask', 'getSetting',
+        'getPriceProtectionSetting',
+        'setVariable', 'priceProtectionNotice', 'checkin_notice',
+        'saveAccount', 'runStatus', 'create_tab',
+        'productPrice', 'promotions', 'getPageSetting',
         'openLogin', 'openPricePro', 'paid', 'getPriceChart', 'getMessages',
         'getOrders', 'clearUnread', 'openUrlAsMoblie', 'getProductPrice',
-        'loginFailed', 'option', 'runTask', 'findOrder', 'findGood', 'myTab'
+        'loginFailed', 'option', 'runTask', 'findOrder', 'findGood', 'myTab',
+        'notice', 'beanCheckinPageResult', 'taskRunResult'
     ];
 
     // Ignore messages that are already forwarded to offscreen to prevent infinite loops
@@ -221,29 +268,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     // Check if the message is a legacy action or explicitly targeted for offscreen
     // (but not ALARM_TRIGGERED which is internal)
-    if (legacyActions.includes(message.action) || (message.target === 'offscreen_proxy')) {
+    if (legacyActions.includes(legacyAction) || (message.target === 'offscreen_proxy')) {
         // We must return true immediately to keep the channel open while we await the offscreen doc
         (async () => {
             try {
                 await ensureOffscreen();
-                // Forward the message to the offscreen document
-                chrome.runtime.sendMessage({
+                const forwardedMessage = {
                     ...message,
+                    action: legacyAction,
                     target: 'offscreen', // Mark as forwarded
                     originalSender: sender // Forward the original sender info
-                }, (response) => {
-                    // Check for lastError to avoid "Unchecked runtime.lastError"
-                    if (chrome.runtime.lastError) {
-                        console.error("Failed to forward message to offscreen:", chrome.runtime.lastError.message);
-                        // Don't call sendResponse if there's an error, or send an error object
-                        sendResponse({ error: chrome.runtime.lastError.message });
-                    } else {
-                        // Return the response from the offscreen document to the original sender
-                        sendResponse(response);
-                    }
-                });
+                };
+                let response;
+                try {
+                    response = await sendToOffscreen(forwardedMessage);
+                } catch (firstError) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    response = await sendToOffscreen(forwardedMessage);
+                }
+                sendResponse(response);
             } catch (error) {
-                console.error("Error in legacy action proxy:", error);
+                console.warn("Unable to forward legacy action:", error.message || error);
                 sendResponse({ error: error.toString() });
             }
         })();

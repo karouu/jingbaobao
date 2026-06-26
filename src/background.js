@@ -6,14 +6,12 @@ import { priceProUrl, mapFrequency, getTask, getTasks } from './tasks'
 import { rand, getSetting, saveSetting, macId } from './utils'
 import { getLoginState } from './account'
 
-import { findGood, findOrder, updateOrders, newMessage, updateMessages, addTaskLog, findAndUpdateTaskResult } from './db'
+import { findGood, findOrder, updateOrders, newMessage, updateMessages, cleanupDeprecatedTaskData, addTaskLog, findAndUpdateTaskResult } from './db'
 
 Logline.using(Logline.PROTOCOL.INDEXEDDB)
 
 import moneyIcon from '../static/image/money.png';
-import coinIcon from '../static/image/coin.png';
 import beanIcon from '../static/image/bean.png';
-import couponIcon from '../static/image/coupon.png';
 
 let logger = {}
 let autoLoginQuota = {}
@@ -132,6 +130,9 @@ function handleAlarm(alarm) {
     case alarm.name.startsWith('runJob'):
       runJob(taskId)
       break;
+    case alarm.name.startsWith('verifyTask'):
+      verifyTaskResult(taskId)
+      break;
     case alarm.name == 'cycleTask':
       findJobs()
       runJob()
@@ -145,13 +146,11 @@ function handleAlarm(alarm) {
       if (el) el.remove();
       break;
     case alarm.name.startsWith('closeTab'):
-      try {
-        chromeTabs.get(taskId, (tab) => {
-          if (tab) {
-            chromeTabs.remove(tab.id)
-          }
-        })
-      } catch (e) { }
+      const tabId = Number(taskId)
+      if (!Number.isInteger(tabId)) break
+      chromeTabs.get(tabId, (tab) => {
+        if (tab) chromeTabs.remove(tab.id)
+      })
       break;
     case alarm.name == 'reload':
       chromeRuntimeReload()
@@ -163,6 +162,14 @@ function handleAlarm(alarm) {
 
 // Listen for forwarded messages from Service Worker
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type && (
+    message.type === 'UPDATE_CONTEXT_MENU' ||
+    message.type === 'CHROME_RUNTIME_RELOAD' ||
+    message.type.startsWith('CHROME_')
+  )) {
+    return false;
+  }
+
   // If the message is forwarded from the Service Worker, use the original sender
   const msg = message.originalSender ? { ...message, ...message.originalSender } : message;
   const originalSender = message.originalSender || sender;
@@ -176,6 +183,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   } else if (message.type === 'NOTIFICATION_BUTTON_CLICKED') {
     handleNotificationButtonClick(message.notificationId, message.buttonIndex);
+    return false;
+  }
+
+  if (message.target !== 'offscreen') {
     return false;
   }
 
@@ -312,6 +323,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             tasks: matchedTasks
           })
           break;
+        case 'beanCheckinPageResult':
+          task = getTask(msg.taskId)
+          done(await recordBeanCheckinPageResult(task, msg.payload || {}))
+          break;
+        case 'taskRunResult':
+          task = getTask(msg.taskId)
+          done(await recordTaskRunResult(task, msg.payload || {}))
+          break;
         case 'getAccount':
           let account = getSetting('jjb_account', null)
           let loginTypeState = getSetting('jjb_login-state_' + msg.type, {})
@@ -379,35 +398,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // 手动运行任务
         case 'runTask':
           task = getTask(msg.taskId)
+          if (!task || task.unavailable || task.deprecated || task.new) {
+            done({
+              result: "failed",
+              message: task && task.pause_description ? task.pause_description : "任务不可用"
+            })
+            break;
+          }
           // set 临时运行
           localStorage.setItem(`temporary_job${task.id}_frequency`, 'onetime');
-          // 任务因为频率受限无法运行
-          if (task.pause) {
-            let taskPauseMsg = `${task.title}已达到当前时段最大时段频率，每小时：${task.rateLimit.hour} 次，请勿重复运行等待自动运行`
+          runJob(task.id, true)
+          if (!msg.hideNotice) {
             sendChromeNotification(new Date().getTime().toString(), {
               type: "basic",
-              title: "任务因为频率受限无法运行",
-              message: taskPauseMsg,
+              title: "正在重新运行" + task.title,
+              message: "任务运行大约需要2分钟，如果有情况我再叫你（请勿连续运行）",
               iconUrl: 'static/image/128.png'
             })
-            done({
-              result: "pause",
-              message: taskPauseMsg
-            })
-          } else {
-            runJob(task.id, true)
-            if (!msg.hideNotice) {
-              sendChromeNotification(new Date().getTime().toString(), {
-                type: "basic",
-                title: "正在重新运行" + task.title,
-                message: "任务运行大约需要2分钟，如果有情况我再叫你（请勿连续运行）",
-                iconUrl: 'static/image/128.png'
-              })
-            }
-            done({
-              result: "success"
-            })
           }
+          done({
+            result: "success"
+          })
           break;
         case 'priceProtectionNotice':
           var play_audio = getSetting('play_audio')
@@ -420,12 +431,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           if (!hide_good || hide_good != 'checked') {
             msg.content = (msg.product_name ? msg.product_name.substr(0, 22) : '') + msg.content
           }
-          sendChromeNotification(new Date().getTime().toString() + '_' + msg.batch, {
-            type: "basic",
-            title: msg.title,
-            message: msg.content,
-            iconUrl: moneyIcon
-          })
+          if (!msg.silent) {
+            sendChromeNotification(new Date().getTime().toString() + '_' + msg.batch, {
+              type: "basic",
+              title: msg.title,
+              message: msg.content,
+              iconUrl: moneyIcon
+            })
+          }
           done({ result: "notice_sent" })
           break;
         case 'checkin_notice':
@@ -439,41 +452,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               if (msg.reward == "bean") {
                 myAudio.src = "static/audio/beans.ogg";
               }
-              if (msg.reward == 'coin') {
-                myAudio.src = "static/audio/coin_drop.ogg";
-              }
               if (myAudio.src) {
                 myAudio.play();
               }
-            }
-            let icon = beanIcon
-            if (msg.reward == 'coin' || msg.reward == 'goldCoin') {
-              icon = coinIcon
             }
             sendChromeNotification(new Date().getTime().toString() + '_' + msg.batch, {
               type: "basic",
               title: msg.title,
               message: msg.content,
-              iconUrl: icon
+              iconUrl: beanIcon
             })
           }
           done({ result: "checkin_notice_handled" })
-          break;
-        // 签到状态
-        case 'markCheckinStatus':
-          let currentStatus = getSetting('jjb_checkin_' + msg.batch, null)
-          let data = {
-            date: DateTime.local().toFormat("o"),
-            time: new Date(),
-            value: msg.value
-          }
-          if (currentStatus && currentStatus.date == DateTime.local().toFormat("o")) {
-            console.log('已经记录过今日签到状态了')
-            done({ result: "already_recorded" })
-          } else {
-            localStorage.setItem('jjb_checkin_' + msg.batch, JSON.stringify(data));
-            done(data)
-          }
           break;
         // 运行状态
         case 'runStatus':
@@ -510,22 +500,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             chromeAlarms.create('closeTab_' + tab.id, { delayInMinutes: 1 })
           })
           done({ result: "tab_created" })
-          break;
-        case 'couponReceived':
-          var coupon = msg.content
-          var mute_coupon = getSetting('mute_coupon')
-          if (mute_coupon && mute_coupon == 'checked') {
-            console.log('coupon', msg)
-          } else {
-            sendChromeNotification(new Date().getTime().toString() + "_coupon_" + coupon.batch, {
-              type: "basic",
-              title: msg.title,
-              message: coupon.name + coupon.price,
-              isClickable: true,
-              iconUrl: couponIcon
-            })
-          }
-          done({ result: "coupon_received" })
           break;
         // 发现新订单
         case 'findOrder':
@@ -597,9 +571,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (msg.action) {
     case 'notice':
     case 'priceProtectionNotice':
-    case 'couponReceived':
-    case 'goldCoinReceived':
-    case 'beanReceived':
     case 'checkin_notice':
       if (msg.test) {
         break;
@@ -613,19 +584,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       let message = {
         taskId: msg.task ? msg.task.id : null,
-        type: msg.type || msg.action || msg.text, // 通知的类型
+        type: msg.type || msg.action || msg.text,
         batch: msg.batch, // 批次，通常是优惠券的属性
         reward: msg.reward, // 奖励的类型
         unit: msg.unit || msg.reward || msg.batch, // 奖励的单位
         value: msg.value, // 奖励的数量
+        status: msg.status,
         title: msg.title,
         content: msg.content,
         timestamp: Date.now()
       }
-      let uuid = msg.uuid || Date.now()
-      updateUnreadCount(1)
+      let messageType = msg.type || msg.action || msg.text
+      let checkinBatch = msg.batch || (msg.task && msg.task.key)
+      let uuid = messageType == 'checkin_notice' && checkinBatch
+        ? `checkin:${checkinBatch}:${DateTime.local().toISODate()}`
+        : (msg.uuid || Date.now())
+      if (messageType == 'checkin_notice' && !message.batch) {
+        message.batch = checkinBatch
+      }
       setTimeout(async () => {
-        await newMessage(uuid, message);
+        let savedMessage = await newMessage(uuid, message);
+        if (savedMessage.created) updateUnreadCount(1)
       }, 50);
       setTimeout(async () => {
         await updateMessages()
@@ -755,12 +734,15 @@ async function runJob(taskId, force = false) {
   let task = getTask(taskId)
 
   // 如果任务已暂停
-  if (task.pause) {
+  if (task.pause && !force) {
     return log('job', task, '已被暂停')
   }
 
   // 如果任务已挂起或已经弃用 且不是强制执行
-  if ((task.suspended || task.deprecated) && !force) {
+  if (task.deprecated) {
+    return log('job', task, '任务入口已失效，不再运行')
+  }
+  if (task.suspended && !force) {
     return log('job', task, '由于账号未登录已暂停运行')
   }
 
@@ -771,9 +753,126 @@ async function runJob(taskId, force = false) {
     setTimeout(() => {
       currentTask = null
     }, 3 * 60 * 1000);
+    localStorage.setItem(`task-started-at:${task.id}`, Date.now())
     await addTaskLog(task)
-    openByIframe(task.url, 'job')
+    if (task.mode == 'tab') {
+      openByTab(task)
+    } else {
+      openByIframe(task.url, 'job')
+    }
   }
+}
+
+async function recordBeanCheckinPageResult(task, payload) {
+  if (!task || task.id != '11') return { status: 'failed', content: '未找到每日京豆签到任务' }
+  let status = payload.status == 'success' ? 'success' : 'failed'
+  let value = Number(payload.value) > 0 ? Number(payload.value) : null
+  let balance = Number(payload.balance) >= 0 ? Number(payload.balance) : null
+  let beforeBalance = Number(payload.beforeBalance) >= 0 ? Number(payload.beforeBalance) : null
+  let previousRecord = getSetting('jjb_checkin_bean', null)
+  let valueFromPreviousRecord = false
+  if (beforeBalance === null && previousRecord && previousRecord.date == DateTime.local().toISODate()) {
+    const beforeBalanceMatch = String(previousRecord.beforeBalance || '').match(/[0-9]+/)
+    beforeBalance = beforeBalanceMatch ? Number(beforeBalanceMatch[0]) : null
+  }
+  if (!value && previousRecord && previousRecord.date == DateTime.local().toISODate()) {
+    value = Number(String(previousRecord.value || '').replace(/[^0-9]/g, '')) || null
+    valueFromPreviousRecord = !!value
+  }
+  if (balance === null && previousRecord && previousRecord.date == DateTime.local().toISODate()) {
+    const balanceMatch = String(previousRecord.balance || '').match(/[0-9]+/)
+    balance = balanceMatch ? Number(balanceMatch[0]) : null
+  }
+  if (beforeBalance !== null && balance !== null && balance >= beforeBalance) {
+    value = balance - beforeBalance
+    valueFromPreviousRecord = false
+  }
+  let content = payload.content || (status == 'success' ? '每日京豆签到成功' : '我的京豆页面未返回签到结果')
+  if (status == 'success') {
+    let beforeText = beforeBalance !== null ? `签到前${beforeBalance}京豆` : '签到前余额未获取'
+    let afterText = balance !== null ? `签到后${balance}京豆` : '签到后余额未获取'
+    let receivedText = value !== null ? `${valueFromPreviousRecord ? '今日已领取' : '本次领取'}${value}京豆` : '领取数量未从页面获取'
+    content = `${beforeText}，${afterText}，${receivedText}`
+  }
+
+  let now = DateTime.local()
+  if (status == 'success') {
+    localStorage.setItem('jjb_checkin_bean', JSON.stringify({
+      date: now.toISODate(),
+      time: now.toISO(),
+      value: value ? `${value}京豆` : null,
+      beforeBalance: beforeBalance !== null ? `${beforeBalance}京豆` : null,
+      balance: balance !== null ? `${balance}京豆` : null
+    }))
+  }
+  localStorage.setItem('job' + task.id + '_lasttime', Date.now())
+  let messageId = `checkin:bean:${now.toISODate()}`
+  let savedMessage = await newMessage(messageId, {
+    taskId: task.id,
+    type: 'checkin_notice',
+    batch: 'bean',
+    reward: status == 'success' ? 'bean' : null,
+    unit: '京豆',
+    value: value,
+    beforeBalance: beforeBalance,
+    balance: balance,
+    status: status,
+    title: status == 'success' ? '每日京豆签到完成' : '每日京豆签到未完成',
+    content: content,
+    timestamp: Date.now()
+  })
+  if (savedMessage.created) updateUnreadCount(1)
+  await findAndUpdateTaskResult(task.id, {
+    action: 'checkin_notice',
+    title: status == 'success' ? '签到成功' : '签到失败',
+    content: content,
+    status: status,
+    timestamp: Date.now()
+  })
+  await updateMessages()
+  if (status == 'failed' || getSetting('mute_checkin') != 'checked') {
+    sendChromeNotification(`bean-checkin_${now.toISODate()}`, {
+      type: 'basic',
+      title: status == 'success' ? '每日京豆签到完成' : '每日京豆签到未完成',
+      message: content,
+      iconUrl: beanIcon
+    })
+  }
+  return { status, value, content }
+}
+
+async function recordTaskRunResult(task, payload) {
+  if (!task) return { status: 'failed', content: '未找到任务' }
+  let status = payload.status == 'success' ? 'success' : 'failed'
+  let content = payload.content || (status == 'success' ? `${task.title}运行完成` : `${task.title}运行失败`)
+  let startedAt = Number(localStorage.getItem(`task-started-at:${task.id}`) || Date.now())
+  let savedMessage = await newMessage(`task-run:${task.id}:${startedAt}`, {
+    taskId: task.id,
+    type: 'notice',
+    batch: `task-${task.id}-run`,
+    status: status,
+    title: status == 'success' ? `${task.title}检查完成` : `${task.title}检查未完成`,
+    content: content,
+    timestamp: Date.now()
+  })
+  if (savedMessage.created) updateUnreadCount(1)
+  await findAndUpdateTaskResult(task.id, {
+    action: 'taskRunResult',
+    title: status == 'success' ? '检查完成' : '检查失败',
+    content: content,
+    status: status,
+    timestamp: Date.now()
+  })
+  await updateMessages()
+  if (status == 'failed') {
+    sendChromeNotification(`task-run-failed_${task.id}_${startedAt}`, {
+      type: 'basic',
+      title: `${task.title}检查未完成`,
+      message: content,
+      iconUrl: task.id == '32' ? moneyIcon : beanIcon
+    })
+  }
+  return { status, content }
 }
 
 function savePrice(price) {
@@ -826,6 +925,93 @@ function openByIframe(src, type, delayTimes = 0) {
   })
 }
 
+function openByTab(task) {
+  chromeTabs.create({
+    url: task.url,
+    active: false
+  }, function (tab) {
+    if (!tab || !tab.id) {
+      verifyTaskResult(task.id)
+      return
+    }
+    chromeTabs.update(tab.id, { muted: true })
+    chromeAlarms.create('verifyTask_' + task.id + '_' + tab.id, { delayInMinutes: task.id == '11' ? 2 : 1 })
+    chromeAlarms.create('closeTab_' + tab.id, { delayInMinutes: task.id == '1' ? 6 : 3 })
+  })
+}
+
+async function verifyTaskResult(taskId) {
+  let task = getTask(taskId)
+  if (!task) return
+  if (task.id == '1') {
+    let startedAt = Number(localStorage.getItem('task-started-at:1') || Date.now())
+    let cachedMessages = getSetting('jjb_messages', [])
+    let hasResult = cachedMessages.some(message => (
+      message.taskId == '1' &&
+      message.batch == 'jiabao-run' &&
+      message.timestamp >= startedAt
+    ))
+    if (hasResult) return
+    let savedMessage = await newMessage(`price-run:${startedAt}`, {
+      taskId: '1',
+      type: 'priceProtectionNotice',
+      batch: 'jiabao-run',
+      status: 'failed',
+      title: '价格保护检查未完成',
+      content: '价保页面未返回检查结果，请检查京东登录状态后重新运行',
+      timestamp: Date.now()
+    })
+    if (savedMessage.created) updateUnreadCount(1)
+    await updateMessages()
+    sendChromeNotification(`price-run-failed_${startedAt}`, {
+      type: 'basic',
+      title: '价格保护检查未完成',
+      message: '请检查京东登录状态后重新运行',
+      iconUrl: moneyIcon
+    })
+    return
+  }
+  if (task.id == '32') {
+    let startedAt = Number(localStorage.getItem('task-started-at:32') || Date.now())
+    let cachedMessages = getSetting('jjb_messages', [])
+    let hasResult = cachedMessages.some(message => (
+      message.taskId == '32' &&
+      message.batch == 'task-32-run' &&
+      message.timestamp >= startedAt
+    ))
+    if (!hasResult) {
+      await recordTaskRunResult(task, {
+        status: 'failed',
+        content: '购物车页面未返回检查结果，请检查京东登录状态后重新运行'
+      })
+    }
+    return
+  }
+  if (!task.checkin || task.checked) return
+  let today = DateTime.local().toISODate()
+  let messageId = `checkin:${task.key}:${today}`
+  let cachedMessages = getSetting('jjb_messages', [])
+  if (cachedMessages.some(message => message.id == messageId && message.status == 'success')) return
+  let savedMessage = await newMessage(messageId, {
+    taskId: task.id,
+    type: 'checkin_notice',
+    batch: task.key,
+    unit: task.key == 'bean' ? '京豆' : task.key,
+    status: 'failed',
+    title: task.title + '未完成',
+    content: '任务页面未返回签到结果，请检查京东登录状态后重新运行',
+    timestamp: Date.now()
+  })
+  if (savedMessage.created) updateUnreadCount(1)
+  await updateMessages()
+  sendChromeNotification(`checkin-failed_${task.id}_${today}`, {
+    type: 'basic',
+    title: task.title + '未完成',
+    message: '请检查京东登录状态后重新运行',
+    iconUrl: beanIcon
+  })
+}
+
 function updateUnreadCount(change = 0) {
   let lastUnreadCount = localStorage.getItem('unreadCount') || 0
   let unreadCount = parseInt(Number(lastUnreadCount) + change)
@@ -858,9 +1044,39 @@ function removeExpiredLocalStorageItems() {
   }
 }
 
-$(document).ready(function () {
+async function cleanupDeprecatedTasks() {
+  if (getSetting('deprecated-task-cleanup-v1', false)) return
+  const deprecatedTaskIds = new Set(['2', '5', '14', '15', '16', '22', '23'])
+  const keysToRemove = []
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index)
+    if (
+      /^job(2|5|14|15|16|22|23)(_|$)/.test(key) ||
+      /^task-(2|5|14|15|16|22|23):settings$/.test(key) ||
+      /^task-usage:(2|5|14|15|16|22|23)$/.test(key) ||
+      /^task-started-at:(2|5|14|15|16|22|23)$/.test(key) ||
+      /^temporary:task-messages:(2|5|14|15|16|22|23):/.test(key) ||
+      key == 'jjb_checkin_baitiao' || key == 'jjb_checkin_gcmall' || key == 'mute_coupon'
+    ) {
+      keysToRemove.push(key)
+    }
+  }
+  keysToRemove.forEach(key => localStorage.removeItem(key))
+  const storedJobStack = getSetting('jobStack', [])
+  const jobStack = (Array.isArray(storedJobStack) ? storedJobStack : []).filter(taskId => !deprecatedTaskIds.has(String(taskId)))
+  saveJobStack(jobStack)
+  const storedTaskParameters = getSetting('task-parameters', [])
+  const taskParameters = (Array.isArray(storedTaskParameters) ? storedTaskParameters : []).filter(task => !deprecatedTaskIds.has(String(task.id)))
+  saveSetting('task-parameters', taskParameters)
+  await cleanupDeprecatedTaskData()
+  await updateMessages()
+  saveSetting('deprecated-task-cleanup-v1', true)
+}
+
+$(document).ready(async function () {
   currentTask = null
   log('background', "document ready", new Date())
+  await cleanupDeprecatedTasks()
   // 每10分钟运行一次定时任务
   chromeAlarms.create('cycleTask', {
     periodInMinutes: 10
@@ -909,15 +1125,10 @@ function handleNotificationClick(notificationId) {
     let type = notificationId.split('_')[2]
     if (batch && batch.length > 1) {
       switch (batch) {
-        case 'baitiao':
-          chromeTabs.create({
-            url: "https://vip.jr.jd.com/coupon/myCoupons?default=IOU"
-          })
-          break;
-        case 'bean':
-          chromeTabs.create({
-            url: "http://bean.jd.com/myJingBean/list"
-          })
+      case 'bean':
+        chromeTabs.create({
+          url: "https://bean.jd.com/myJingBean/list"
+        })
           break;
         case 'jiabao':
           chromeTabs.create({
@@ -934,13 +1145,7 @@ function handleNotificationClick(notificationId) {
           }
           break;
         default:
-          if (batch && batch != 'undefined' && type == 'coupon') {
-            chromeTabs.create({
-              url: "https://search.jd.com/Search?coupon_batch=" + batch
-            })
-          } else {
-            // Removed zaoshu.so coupon link
-          }
+          break;
       }
     }
   }
