@@ -41,12 +41,7 @@ module.exports = {
     rules: [
       {
         test: /\.(png|jpg|gif)$/i,
-        type: 'asset',
-        parser: {
-          dataUrlCondition: {
-            maxSize: 8192
-          }
-        },
+        type: 'asset/resource',
         generator: {
           filename: 'images/[name][ext][query]'
         }
@@ -97,10 +92,8 @@ module.exports = {
           }
         },
         { from: 'public', to: '.', globOptions: { ignore: ['**/manifest.json'] } },
-        {
-          from: 'static/audio',
-          to: 'static/audio'
-        },
+        { from: 'static/audio/beans.ogg', to: 'static/audio/beans.ogg' },
+        { from: 'static/audio/price_protection.ogg', to: 'static/audio/price_protection.ogg' },
         {
           from: 'static/image/icon',
           to: 'static/image/icon'

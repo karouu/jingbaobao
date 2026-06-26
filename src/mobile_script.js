@@ -74,4 +74,16 @@
     if (window.location.href.indexOf("/pc/") < 0) {
         window.navigator.userAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 9_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/10.2 Mobile/15E148 Safari/604.1 jdjr-app ios';
     }
+
+    function enableTouchEmulator() {
+        if (typeof window.TouchEmulator === 'function') {
+            window.TouchEmulator({ force: true });
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', enableTouchEmulator, { once: true });
+    } else {
+        enableTouchEmulator();
+    }
 })();
